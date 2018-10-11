@@ -1,0 +1,38 @@
+{
+    "experiment_name": "test",
+    "model": {
+        "definition": "mnist_net",
+        "params": {
+            "num_outputs": [10]
+        },
+        "weights": null
+    },
+    "feeders": [
+        {
+            "definition": "toy",
+            "params": {
+                "common": {"dataset": "mnist"},
+                "training": {"shuffle": true},
+                "validating": {}
+            },
+            "attach_to": 0
+        }
+    ],
+    "losses": [
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 0
+        }
+    ],
+    "metrics": [
+        {
+            "definition": "categorical_accuracy",
+            "attach_to": 0
+        }
+    ],
+    "optimizer": {
+        "definition": "AdamOptimizer",
+        "params": {}
+    }
+}

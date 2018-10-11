@@ -1,0 +1,11 @@
+# python
+__pycache__/
+*.pyd
+*.pyc
+
+# vim stuffs
+*.swp
+*.swo
+
+# prototyping folder
+prototyping/
