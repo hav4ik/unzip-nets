@@ -116,9 +116,6 @@ def train_multitask(config,
     loss_defs = _read_loss_defs_cfg(cfg)
     metrics_defs = _read_metrics_defs_cfg(cfg)
     optimizer_op, optimizer_params = _read_optimizer_op_cfg(cfg)
-    assert len(outputs) == len(training_feeders)
-    assert len(outputs) == len(validating_feeders)
-    assert len(outputs) == len(loss_defs)
 
     ground_truths = []
     for output in outputs:
@@ -132,10 +129,28 @@ def train_multitask(config,
 
     metrics = [[]] * len(outputs)
     for metrics_def in metrics_defs:
-        metrics[metrics_def.attach_to].append(metrics_def.metrics(
-            ground_truths[metrics_def.attach_to], outputs[metrics_def.attach_to]))
+        metrics[metrics_def.attach_to].append(tf.reduce_mean(metrics_def.metrics(
+            ground_truths[metrics_def.attach_to], outputs[metrics_def.attach_to])))
+
+    n_train_samples = [f.n // batch_size for f in training_feeders]
+    train_feeder_idx = np.zeros(shape=(sum(n_train_samples)), dtype=np.uint32)
+    accumulated = 0
+    for i in range(len(n_train_samples)):
+        train_feeder_idx[accumulated:accumulated+n_train_samples[i]] = i
+        accumulated += n_train_samples[i]
+
+    n_val_samples = [f.n // batch_size for f in validating_feeders]
+    val_feeder_idx = np.zeros(shape=(sum(n_val_samples)), dtype=np.uint32)
+    accumulated = 0
+    for i in range(len(n_val_samples)):
+        val_feeder_idx[accumulated:accumulated+n_val_samples[i]] = i
+        accumulated += n_val_samples[i]
 
     if mode == 'alternating':
+        assert len(outputs) == len(training_feeders)
+        assert len(outputs) == len(validating_feeders)
+        assert len(outputs) == len(loss_defs)
+
         targets = []
         for loss in losses:
             targets.append(optimizer_op(**optimizer_params).minimize(loss))
@@ -143,22 +158,36 @@ def train_multitask(config,
         writer = tf.summary.FileWriter(out_dir, sess.graph)
         writer.close()
 
-        n_samples = [f.n // batch_size for f in training_feeders]
-        feeder_idx = np.zeros(shape=(sum(n_samples)), dtype=np.uint32)
-        accumulated = 0
-        for i in range(len(n_samples)):
-            feeder_idx[accumulated:accumulated+n_samples[i]] = i
-
         init = tf.global_variables_initializer()
         sess.run(init)
-        for epoch in range(n_epochs):
-            np.random.shuffle(feeder_idx)
 
-            idxs = tqdm(feeder_idx, ascii=True, desc='epoch #{}'.format(epoch))
-            for idx in idxs:
+        for epoch in range(n_epochs):
+            print('Epoch #{}:'.format(epoch))
+            np.random.shuffle(train_feeder_idx)
+
+            train_idxs = tqdm(train_feeder_idx, ascii=True, desc='train'.format(epoch))
+            for idx in train_idxs:
                 x, y = next(training_feeders[idx])
-                out = sess.run([losses[idx]] + metrics[idx] + [targets[idx]],
-                        feed_dict={inputs[0]: x, ground_truths[idx]: y})
+                out = sess.run([losses[idx]] + metrics[idx] + [targets[idx]] + update_ops,
+                        feed_dict={inputs[0]: x, ground_truths[idx]: y, K.learning_phase(): 1})
+
+            val_loss = 0
+            val_idxs = tqdm(val_feeder_idx, ascii=True, desc='val'.format(epoch))
+            for idx in val_idxs:
+                x, y = next(validating_feeders[idx])
+                out = sess.run([losses[idx]] + metrics[idx],
+                        feed_dict={inputs[0]: x, ground_truths[idx]: y, K.learning_phase(): 0})
+                val_loss += out[0]
+
+            print('loss: {:.6f}'.format(val_loss / val_feeder_idx.shape[0]), end=' ')
+
+
+    elif mode == 'joint':
+        pass
+
+    else:
+        raise ValueError
+
 
 
 
@@ -166,7 +195,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('config', type=str, help='A JSON file or a string in JSON format')
     parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-n', '--epochs', type=int, default=1)
+    parser.add_argument('-n', '--epochs', type=int, default=10)
     parser.add_argument('-m', '--mode', type=str, default='alternating')
     parser.add_argument('-o', '--out_dir', type=str, default='out/')
     args = parser.parse_args()
