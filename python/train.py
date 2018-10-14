@@ -1,7 +1,6 @@
 import os
 from argparse import ArgumentParser
 import numpy as np
-from collections import namedtuple
 from tqdm import tqdm
 
 import tensorflow as tf
@@ -13,13 +12,14 @@ import custom.feeders
 import custom.losses
 
 
-
 def _read_model_cfg(cfg):
     """Reads model configuration from config dictionary
     """
     model_config = cfg['model']
-    inputs, outputs, update_ops = load_model(model_config['definition'],
-            model_config['weights'], model_config['params'])
+    inputs, outputs, update_ops = load_model(
+            model_config['definition'],
+            model_config['weights'],
+            model_config['params'])
     return inputs, outputs, update_ops
 
 
@@ -29,10 +29,11 @@ def _read_feeders_cfg(cfg, batch_size):
     training_feeders = []
     validating_feeders = []
     for feeder_config in cfg['feeders']:
-        training_cfg = dict(feeder_config['params']['common'],
-                **feeder_config['params']['training'])
-        validating_cfg = dict(feeder_config['params']['common'],
-                **feeder_config['params']['validating'])
+        common = feeder_config['params']['common']
+        training_cfg = feeder_config['params']['training']
+        validating_cfg = feeder_config['params']['validating']
+        training_cfg.update(common)
+        validating_cfg.update(common)
         feeder = getattr(custom.feeders, feeder_config['definition'])
 
         training_feeders.append(
@@ -73,13 +74,16 @@ def _read_metrics_defs_cfg(cfg):
             metrics = getattr(custom.metrics, metrics_config['definition'])
         else:
             raise ValueError
-        metrics_def = {'metrics': metrics,
+        metrics_def = {
+                'metrics': metrics,
                 'attach_to': metrics_config['attach_to']}
         metrics_defs.append(config_parser.dict2obj(metrics_def))
     return metrics_defs
 
 
 def _read_optimizer_op_cfg(cfg):
+    """Loads optimizer ops from keras or custom module
+    """
     optimizer_config = cfg['optimizer']
     if hasattr(tf.train, optimizer_config['definition']):
         optimizer_op = getattr(tf.train, optimizer_config['definition'])
@@ -87,6 +91,31 @@ def _read_optimizer_op_cfg(cfg):
     else:
         raise ValueError
     return optimizer_op, optimizer_params
+
+
+def _concatenate_feeders(feeders):
+    """Make a index array to make a data feeder stream
+    """
+    n_samples = np.array([f.n // f.batch_size for f in feeders])
+    feeder_idx = np.zeros(shape=(sum(n_samples)), dtype=np.uint32)
+    accumulated = 0
+    for i in range(len(n_samples)):
+        feeder_idx[accumulated:accumulated+n_samples[i]] = i
+        accumulated += n_samples[i]
+    return feeder_idx, n_samples
+
+
+def _initialize_variables(sess):
+    """Initialize uninitialized variables (all variables except those
+       that already have weight)
+    """
+    uninitialized_names = sess.run(tf.report_uninitialized_variables())
+    for i in range(len(uninitialized_names)):
+        uninitialized_names[i] = uninitialized_names[i].decode('utf-8')
+    init_op = tf.variables_initializer(
+            [v for v in tf.global_variables()
+                if v.name.split(':')[0] in uninitialized_names])
+    sess.run(init_op)
 
 
 def train_multitask(config,
@@ -124,63 +153,71 @@ def train_multitask(config,
 
     losses = [None] * len(outputs)
     for loss_def in loss_defs:
-        losses[loss_def.attach_to] = loss_def.coeff * tf.reduce_mean(loss_def.loss(
-            ground_truths[loss_def.attach_to], outputs[loss_def.attach_to]))
+        with tf.name_scope('losses'):
+            losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
+                    ground_truths[loss_def.attach_to],
+                    outputs[loss_def.attach_to]))
+            losses[loss_def.attach_to] *= loss_def.coeff
 
-    metrics = [[]] * len(outputs)
+    metrics = [[] for i in range(len(outputs))]
     for metrics_def in metrics_defs:
-        metrics[metrics_def.attach_to].append(tf.reduce_mean(metrics_def.metrics(
-            ground_truths[metrics_def.attach_to], outputs[metrics_def.attach_to])))
+        with tf.name_scope('metrics'):
+            m = tf.reduce_mean(metrics_def.metrics(
+                    ground_truths[metrics_def.attach_to],
+                    outputs[metrics_def.attach_to]))
+            metrics[metrics_def.attach_to].append(m)
 
-    n_train_samples = [f.n // batch_size for f in training_feeders]
-    train_feeder_idx = np.zeros(shape=(sum(n_train_samples)), dtype=np.uint32)
-    accumulated = 0
-    for i in range(len(n_train_samples)):
-        train_feeder_idx[accumulated:accumulated+n_train_samples[i]] = i
-        accumulated += n_train_samples[i]
+    train_feeder_idx, train_samples = _concatenate_feeders(training_feeders)
+    val_feeder_idx, val_samples = _concatenate_feeders(validating_feeders)
 
-    n_val_samples = [f.n // batch_size for f in validating_feeders]
-    val_feeder_idx = np.zeros(shape=(sum(n_val_samples)), dtype=np.uint32)
-    accumulated = 0
-    for i in range(len(n_val_samples)):
-        val_feeder_idx[accumulated:accumulated+n_val_samples[i]] = i
-        accumulated += n_val_samples[i]
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
 
     if mode == 'alternating':
-        assert len(outputs) == len(training_feeders)
-        assert len(outputs) == len(validating_feeders)
-        assert len(outputs) == len(loss_defs)
-
         targets = []
         for loss in losses:
             targets.append(optimizer_op(**optimizer_params).minimize(loss))
+        _initialize_variables(sess)
 
         writer = tf.summary.FileWriter(out_dir, sess.graph)
         writer.close()
-
-        init = tf.global_variables_initializer()
-        sess.run(init)
 
         for epoch in range(n_epochs):
             print('Epoch #{}:'.format(epoch))
             np.random.shuffle(train_feeder_idx)
 
-            train_idxs = tqdm(train_feeder_idx, ascii=True, desc='train'.format(epoch))
+            train_idxs = tqdm(train_feeder_idx[:], desc='trn')
             for idx in train_idxs:
                 x, y = next(training_feeders[idx])
-                out = sess.run([losses[idx]] + metrics[idx] + [targets[idx]] + update_ops,
-                        feed_dict={inputs[0]: x, ground_truths[idx]: y, K.learning_phase(): 1})
+                with tf.control_dependencies(update_ops):
+                    ops_list = [losses[idx]] + metrics[idx] + [targets[idx]]
+                    feed_dict = {
+                            inputs[0]: x,
+                            ground_truths[idx]: y,
+                            K.learning_phase(): 1}
+                    out = sess.run(ops_list, feed_dict=feed_dict)
 
-            val_loss = 0
-            val_idxs = tqdm(val_feeder_idx, ascii=True, desc='val'.format(epoch))
+            val_losses = [0] * len(outputs)
+            val_metrics = [np.zeros((len(metrics[i])))
+                    for i in range(len(outputs))]
+            val_idxs = tqdm(val_feeder_idx[:], desc='val')
             for idx in val_idxs:
                 x, y = next(validating_feeders[idx])
-                out = sess.run([losses[idx]] + metrics[idx],
-                        feed_dict={inputs[0]: x, ground_truths[idx]: y, K.learning_phase(): 0})
-                val_loss += out[0]
+                ops_list = [losses[idx]] + metrics[idx]
+                feed_dict = {
+                        inputs[0]: x,
+                        ground_truths[idx]: y,
+                        K.learning_phase(): 0}
+                out = sess.run(ops_list, feed_dict=feed_dict)
+                val_losses[idx] += out[0]
+                val_metrics[idx] += out[1:]
 
-            print('loss: {:.6f}'.format(val_loss / val_feeder_idx.shape[0]), end=' ')
-
+            print('losses:', ', '.join([
+                    '{:.6f}'.format(val_losses[i] / val_samples[i])
+                    for i in range(len(outputs))]))
+            print('metrics:')
+            for i in range(len(outputs)):
+                print(val_metrics[i] / val_samples[i])
 
     elif mode == 'joint':
         pass
@@ -189,15 +226,18 @@ def train_multitask(config,
         raise ValueError
 
 
-
-
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('config', type=str, help='A JSON file or a string in JSON format')
+    parser.add_argument(
+            'config', type=str, help='A JSON file or a string in JSON format')
     parser.add_argument('-b', '--batch_size', type=int, default=32)
     parser.add_argument('-n', '--epochs', type=int, default=10)
     parser.add_argument('-m', '--mode', type=str, default='alternating')
     parser.add_argument('-o', '--out_dir', type=str, default='out/')
     args = parser.parse_args()
 
-    train_multitask(args.config, args.batch_size, args.epochs, args.out_dir, args.mode)
+    train_multitask(args.config,
+                    args.batch_size,
+                    args.epochs,
+                    args.out_dir,
+                    args.mode)

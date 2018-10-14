@@ -27,10 +27,10 @@ class toy:
         return self
 
     def __next__(self):
+        if self._k >= self.n:
+            np.random.shuffle(self._indices)
+            self._k = 0
         x_slice = self.x[self._indices[self._k:self._k+self.batch_size]]
         y_slice = self.y[self._indices[self._k:self._k+self.batch_size]]
         self._k += self.batch_size
-        if self._k > self.n:
-            np.random.shuffle(self._indices)
-            self._k = 0
         return x_slice, y_slice

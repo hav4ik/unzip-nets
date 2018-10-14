@@ -3,7 +3,10 @@
     "model": {
         "definition": "mnist_net",
         "params": {
-            "num_outputs": [10]
+            "outputs": [
+                {"name": "mnist", "num": 10},
+                {"name": "fashion", "num": 10}
+            ]
         },
         "weights": null
     },
@@ -16,6 +19,15 @@
                 "validating": {}
             },
             "attach_to": 0
+        },
+        {
+            "definition": "toy",
+            "params": {
+                "common": {"dataset": "fashion_mnist"},
+                "training": {"shuffle": true},
+                "validating": {}
+            },
+            "attach_to": 1
         }
     ],
     "losses": [
@@ -23,16 +35,27 @@
             "definition": "categorical_crossentropy",
             "coeff": 1.0,
             "attach_to": 0
+        },
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 1
         }
     ],
     "metrics": [
         {
             "definition": "categorical_accuracy",
             "attach_to": 0
+        },
+        {
+            "definition": "categorical_accuracy",
+            "attach_to": 1
         }
     ],
     "optimizer": {
-        "definition": "AdamOptimizer",
-        "params": {}
+        "definition": "GradientDescentOptimizer",
+        "params": {
+            "learning_rate": 0.001
+        }
     }
 }
