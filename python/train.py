@@ -208,21 +208,24 @@ def train_multitask(config,
             trn_metrics = [
                 np.zeros((len(metrics[i]))) for i in range(len(outputs))]
             train_idxs = tqdm(train_feeder_idx[:], desc='trn')
+
             for idx in train_idxs:
                 x, y = next(training_feeders[idx])
-
-                ops_list = [losses[idx]] + metrics[idx] + [targets[idx]]
+                ops_to_run = {'loss': losses[idx],
+                              'metrics': metrics[idx],
+                              'optimizer': targets[idx]}
                 summary_counter += 1
                 if summary_counter % 100 == 0 and idx == 0:
-                    ops_list += [summaries_op]
+                    ops_to_run['summaries'] = summaries_op
 
                 feed_dict = {inputs[0]: x,
                              ground_truths[idx]: y,
                              K.learning_phase(): 1}
-                out = sess.run(ops_list, feed_dict=feed_dict)
+                out = sess.run(ops_to_run, feed_dict=feed_dict)
 
-                if summary_counter % 100 == 0 and idx == 0:
-                    summaries_writer.add_summary(out[-1], summary_counter)
+                if 'summaries' in out:
+                    summaries_writer.add_summary(
+                            out['summaries'], summary_counter)
 
                 trn_losses[idx] += out[0]
                 trn_metrics[idx] += out[1:len(metrics[idx])+1]
