@@ -1,11 +1,10 @@
 {
     "experiment_name": "test",
     "model": {
-        "definition": "mnist_net",
+        "definition": "resnet_20",
         "params": {
             "outputs": [
-                {"name": "mnist", "num": 10},
-                {"name": "fashion", "num": 10}
+                {"name": "cifar10", "num": 10}
             ]
         },
         "weights": null
@@ -14,20 +13,16 @@
         {
             "definition": "toy",
             "params": {
-                "common": {"dataset": "mnist"},
+                "common": {
+                    "dataset": "cifar10",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
                 "training": {"shuffle": true},
                 "validating": {}
             },
             "attach_to": 0
-        },
-        {
-            "definition": "toy",
-            "params": {
-                "common": {"dataset": "fashion_mnist"},
-                "training": {"shuffle": true},
-                "validating": {}
-            },
-            "attach_to": 1
         }
     ],
     "losses": [
@@ -35,27 +30,20 @@
             "definition": "categorical_crossentropy",
             "coeff": 1.0,
             "attach_to": 0
-        },
-        {
-            "definition": "categorical_crossentropy",
-            "coeff": 1.0,
-            "attach_to": 1
         }
     ],
     "metrics": [
         {
             "definition": "categorical_accuracy",
             "attach_to": 0
-        },
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 1
         }
     ],
     "optimizer": {
-        "definition": "GradientDescentOptimizer",
+        "definition": "MomentumOptimizer",
         "params": {
-            "learning_rate": 0.001
+            "learning_rate": 0.1,
+            "momentum": 0.4,
+            "use_nesterov": true
         }
     }
 }
