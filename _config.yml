@@ -1,0 +1,6 @@
+---
+exclude: ['README.md']
+permalink: ':title'
+pygments: true
+safe: false
+title: 'Literature Review'

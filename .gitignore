@@ -1,0 +1,12 @@
+.*
+!.gitignore
+!.gitmodules
+*~
+
+components/
+
+_site/
+
+# for vim users
+*.swp
+*.swo
