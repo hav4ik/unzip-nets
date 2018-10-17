@@ -10,7 +10,7 @@ layout: nil
 This paper gives an answer to the question "when to split a layer into branches" while training a Multi-Tasking Neural Network. It uses a naive approach, based on so called "affinity score" between branches.
 
 <p align="center">
-  <img src="/static/images/task_splitting.svg" alt="" style="width:70%"/>
+  <img src="{{site.baseurl}}/static/images/task_splitting.svg" alt="" style="width:70%"/>
 </p>
 
 The downside of this naive approach is that it based off the data solely, and does not account the values of the neurons weights or activations or inner representations.
