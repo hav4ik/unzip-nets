@@ -178,11 +178,11 @@ code {
 }
 
 /* GET */
-#content article.GET a h2 code {
+#content article.MTL a h2 code {
   color: #119bdf;
 }
 
-#content article.GET a h2 code b {
+#content article.MTL a h2 code b {
   background: #119bdf;
 }
 
