@@ -1,10 +1,10 @@
 {
-    "experiment_name": "test",
+    "experiment_name": "one_task",
     "model": {
         "definition": "resnet_20",
         "params": {
             "outputs": [
-                {"name": "cifar10", "num": 10}
+                {"name": "head_1", "num": 10}
             ]
         },
         "weights": null

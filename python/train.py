@@ -286,7 +286,7 @@ def train_multitask(config,
 
             val_losses_mean = val_losses.mean()
             if val_losses_mean < prev_val_loss_mean:
-                print('The validation loss sum has improved from {:.6f} to '
+                print('The validation loss mean has improved from {:.6f} to '
                       '{:.6f}. Saving checkpoints.'.format(prev_val_loss_mean,
                                                            val_losses_mean))
                 prev_val_loss_mean = val_losses_mean

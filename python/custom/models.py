@@ -3,6 +3,27 @@ import tensorflow as tf
 layers = tf.keras.layers
 
 
+def _get_keras_update_ops(model):
+    """Gets a list of update_ops of keras model
+    """
+    update_ops = []
+    for op in model.updates:
+        if isinstance(op, tuple):
+            update_ops.append(tf.assign(op[0], op[1]))
+        else:
+            update_ops.append(op)
+    return update_ops
+
+
+def _get_keras_regularizers(model):
+    """Gets a list of update_ops of keras model
+    """
+    regularizers = None
+    if len(model.losses) > 0:
+        regularizers = tf.add_n(model.losses)
+    return regularizers
+
+
 def lenet(outputs):
     inputs = layers.Input(shape=(32, 32, 3))
     x = layers.Conv2D(32, (3, 3), kernel_initializer='glorot_uniform')(inputs)
@@ -19,14 +40,8 @@ def lenet(outputs):
         ys.append(layers.Dense(output['num'], activation='softmax')(x))
     model = tf.keras.models.Model(inputs=[inputs], outputs=ys)
 
-    update_ops = []
-    for op in model.updates:
-        if isinstance(op, tuple):
-            update_ops.append(tf.assign(op[0], op[1]))
-        else:
-            update_ops.append(op)
-
-    return model.inputs, model.outputs, update_ops
+    return (model.inputs, model.outputs,
+           _get_keras_update_pos(model), _get_keras_regularizers(model))
 
 
 def alexnet(outputs):
@@ -65,11 +80,8 @@ def alexnet(outputs):
     model.add(layers.Flatten())
     model.add(layers.Dense(10, activation='softmax'))
 
-    if len(model.losses) == 0:
-        regularizers = None
-    else:
-        regularizers = tf.add_n(model.losses)
-    return model.inputs, model.outputs, [], regularizers
+    return (model.inputs, model.outputs,
+            _get_keras_update_ops(model), _get_keras_regularizers(model))
 
 
 def resnet_20(outputs):
@@ -121,19 +133,8 @@ def resnet_20(outputs):
             kernel_initializer='he_normal')(x))
     model = tf.keras.models.Model(inputs=[img_input], outputs=ys)
 
-    update_ops = []
-    for op in model.updates:
-        if isinstance(op, tuple):
-            update_ops.append(tf.assign(op[0], op[1]))
-        else:
-            update_ops.append(op)
-
-    if len(model.losses) == 0:
-        regulizers = None
-    else:
-        regulizers = tf.add_n(model.losses)
-
-    return model.inputs, model.outputs, update_ops, regulizers
+    return (model.inputs, model.outputs,
+            _get_keras_update_ops(model), _get_keras_regularizers(model))
 
 
 def mobilenetv2_mtc(num_outputs=[1000],
@@ -155,11 +156,5 @@ def mobilenetv2_mtc(num_outputs=[1000],
 
     model = tf.keras.models.Model(inputs=bottom.inputs, outputs=outputs)
 
-    update_ops = []
-    for op in model.updates:
-        if isinstance(op, tuple):
-            update_ops.append(tf.assign(op[0], op[1]))
-        else:
-            update_ops.append(op)
-
-    return bottom.inputs, outputs, update_ops
+    return (bottom.inputs, outputs,
+            _get_keras_update_ops(model), _get_keras_regularizers(model))
