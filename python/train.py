@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 
 from utils import config_parser
-from utils.model_utils import load_model
+from utils.model_utils import load_model, get_variables
 import custom.feeders
 import custom.losses
 
@@ -44,7 +44,7 @@ def _read_feeders_cfg(cfg, batch_size):
     return training_feeders, validating_feeders
 
 
-def _read_loss_defs_cfg(cfg):
+def _read_losses_cfg(cfg, outputs, ground_truths, regularizer):
     """Read loss functions definitions from configuration dictionary
     """
     loss_defs = []
@@ -59,10 +59,21 @@ def _read_loss_defs_cfg(cfg):
                     'attach_to': loss_config['attach_to'],
                     'coeff': loss_config['coeff']}
         loss_defs.append(config_parser.dict2obj(loss_def))
-    return loss_defs
+
+    losses = [None] * len(outputs)
+    for loss_def in loss_defs:
+        with tf.name_scope('losses'):
+            losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
+                ground_truths[loss_def.attach_to],
+                outputs[loss_def.attach_to]))
+            losses[loss_def.attach_to] *= loss_def.coeff
+            if regularizer is not None:
+                losses[loss_def.attach_to] += regularizer
+
+    return losses
 
 
-def _read_metrics_defs_cfg(cfg):
+def _read_metrics_cfg(cfg, outputs, ground_truths):
     """Read metrics definitions from configuration dictionary
     """
     metrics_defs = []
@@ -76,7 +87,16 @@ def _read_metrics_defs_cfg(cfg):
         metrics_def = {'metrics': metrics,
                        'attach_to': metrics_config['attach_to']}
         metrics_defs.append(config_parser.dict2obj(metrics_def))
-    return metrics_defs
+
+    metrics = [[] for i in range(len(outputs))]
+    for metrics_def in metrics_defs:
+        with tf.name_scope('metrics'):
+            m = tf.reduce_mean(metrics_def.metrics(
+                ground_truths[metrics_def.attach_to],
+                outputs[metrics_def.attach_to]))
+            metrics[metrics_def.attach_to].append(m)
+
+    return metrics
 
 
 def _read_optimizer_op_cfg(cfg):
@@ -116,6 +136,34 @@ def _initialize_uninitialized_variables(sess):
     sess.run(init_op)
 
 
+def _prepare_dirs(out_dir):
+    """Prepares the output directory structure
+    """
+    tensorboard_dir = os.path.join(out_dir, 'tensorboard')
+    checkpoints_dir = os.path.join(out_dir, 'checkpoints')
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    if not os.path.isdir(tensorboard_dir):
+        os.makedirs(tensorboard_dir)
+    if not os.path.isdir(checkpoints_dir):
+        os.makedirs(checkpoints_dir)
+    return tensorboard_dir, checkpoints_dir
+
+
+def _l2_filter_norm(t):
+    return tf.sqrt(tf.reduce_sum(
+        tf.pow(t, 2),
+        np.arange(len(t.get_shape()) - 1, dtype=np.int32)))
+
+
+def _prepare_environment():
+    sess_config = tf.ConfigProto()
+    sess_config.gpu_options.allow_growth = True
+    sess = tf.Session(config=sess_config)
+    K.set_session(sess)
+    return sess
+
+
 def train_multitask(config,
                     batch_size,
                     n_epochs,
@@ -131,47 +179,26 @@ def train_multitask(config,
       mode:        one of the following: 'alternating', 'joint', more in docs
       verbose:     from 0 to 2
     """
-    sess_config = tf.ConfigProto()
-    sess_config.gpu_options.allow_growth = True
-
-    sess = tf.Session(config=sess_config)
-    K.set_session(sess)
+    sess = _prepare_environment()
     cfg = config_parser.read_config(config)
+    tensorboard_dir, checkpoints_dir = _prepare_dirs(out_dir)
 
-    inputs, outputs, update_ops, regulizer = _read_model_cfg(cfg)
-    training_feeders, validating_feeders = _read_feeders_cfg(cfg, batch_size)
-    loss_defs = _read_loss_defs_cfg(cfg)
-    metrics_defs = _read_metrics_defs_cfg(cfg)
-    optimizer_op, optimizer_params = _read_optimizer_op_cfg(cfg)
+    with tf.name_scope(cfg['model']['definition']):
+        inputs, outputs, update_ops, regularizer = _read_model_cfg(cfg)
+    model_saver = tf.train.Saver(get_variables(cfg['model']['definition']))
 
     ground_truths = []
     for output in outputs:
         y = tf.placeholder(shape=output.get_shape(), dtype=tf.float32)
         ground_truths.append(y)
 
-    losses = [None] * len(outputs)
-    for loss_def in loss_defs:
-        with tf.name_scope('losses'):
-            losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
-                ground_truths[loss_def.attach_to],
-                outputs[loss_def.attach_to]))
-            losses[loss_def.attach_to] *= loss_def.coeff
-            if regulizer is not None:
-                losses[loss_def.attach_to] += regulizer
-
-    metrics = [[] for i in range(len(outputs))]
-    for metrics_def in metrics_defs:
-        with tf.name_scope('metrics'):
-            m = tf.reduce_mean(metrics_def.metrics(
-                ground_truths[metrics_def.attach_to],
-                outputs[metrics_def.attach_to]))
-            metrics[metrics_def.attach_to].append(m)
+    training_feeders, validating_feeders = _read_feeders_cfg(cfg, batch_size)
+    optimizer_op, optimizer_params = _read_optimizer_op_cfg(cfg)
+    losses = _read_losses_cfg(cfg, outputs, ground_truths, regularizer)
+    metrics = _read_metrics_cfg(cfg, outputs, ground_truths)
 
     train_feeder_idx, train_samples = _concatenate_feeders(training_feeders)
     val_feeder_idx, val_samples = _concatenate_feeders(validating_feeders)
-
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir)
 
     if mode == 'alternating':
         gradients = []
@@ -185,26 +212,23 @@ def train_multitask(config,
 
         _initialize_uninitialized_variables(sess)
 
-        def l2_norm(t):
-            return tf.sqrt(tf.reduce_sum(
-                tf.pow(t, 2),
-                np.arange(len(t.get_shape()) - 1, dtype=np.int32)))
+        with tf.name_scope('tensorboard'):
+            for g, v in gradients[0]:
+                if g is None:
+                    continue
+                tf.summary.histogram("gradients/" + v.name, _l2_filter_norm(g))
+                tf.summary.histogram("variables/" + v.name, _l2_filter_norm(v))
+            summaries_op = tf.summary.merge_all()
 
-        for g, v in gradients[0]:
-            if g is None:
-                continue
-            tf.summary.histogram("gradients/" + v.name, l2_norm(g))
-            tf.summary.histogram("variables/" + v.name, l2_norm(v))
-
-        summaries_op = tf.summary.merge_all()
-        summaries_writer = tf.summary.FileWriter(out_dir, sess.graph)
+        summaries_writer = tf.summary.FileWriter(tensorboard_dir, sess.graph)
         summary_counter = 0
 
+        prev_val_loss_mean = float('inf')
         for epoch in range(n_epochs):
             print('\nEpoch #{}:'.format(epoch))
             np.random.shuffle(train_feeder_idx)
 
-            trn_losses = [0] * len(outputs)
+            trn_losses = np.zeros(shape=(len(outputs)), dtype=np.float64)
             trn_metrics = [
                 np.zeros((len(metrics[i]))) for i in range(len(outputs))]
             train_idxs = tqdm(train_feeder_idx[:], desc='trn')
@@ -227,10 +251,10 @@ def train_multitask(config,
                     summaries_writer.add_summary(
                             out['summaries'], summary_counter)
 
-                trn_losses[idx] += out[0]
-                trn_metrics[idx] += out[1:len(metrics[idx])+1]
+                trn_losses[idx] += out['loss']
+                trn_metrics[idx] += out['metrics']
 
-            val_losses = [0] * len(outputs)
+            val_losses = np.zeros(shape=(len(outputs)), dtype=np.float64)
             val_metrics = [
                     np.zeros((len(metrics[i]))) for i in range(len(outputs))]
             val_idxs = tqdm(val_feeder_idx[:], desc='val')
@@ -246,20 +270,28 @@ def train_multitask(config,
                 val_losses[idx] += out[0]
                 val_metrics[idx] += out[1:]
 
+            trn_losses /= train_samples
+            trn_metrics /= train_samples
+            val_losses /= val_samples
+            val_metrics /= val_samples
+
             for i in range(len(outputs)):
                 print('task #{}:'.format(i))
-
-                trn_losses[i] /= train_samples[i]
-                trn_metrics[i] /= train_samples[i]
-                val_losses[i] /= val_samples[i]
-                val_metrics[i] /= val_samples[i]
-
                 print('  -(train): loss={:3.6f}, metrics=[{}]'.format(
                     trn_losses[i],
                     ', '.join(['{:.6f}'.format(x) for x in trn_metrics[i]])))
                 print('  -(val)  : loss={:3.6f}, metrics=[{}]'.format(
                     val_losses[i],
                     ', '.join(['{:.6f}'.format(x) for x in val_metrics[i]])))
+
+            val_losses_mean = val_losses.mean()
+            if val_losses_mean < prev_val_loss_mean:
+                print('The validation loss sum has improved from {:.6f} to '
+                      '{:.6f}. Saving checkpoints.'.format(prev_val_loss_mean,
+                                                           val_losses_mean))
+                prev_val_loss_mean = val_losses_mean
+                model_saver.save(sess, os.path.join(
+                    checkpoints_dir, 'mtl'), global_step=epoch)
 
     elif mode == 'joint':
         pass

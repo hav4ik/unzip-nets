@@ -15,3 +15,14 @@ def load_model(model, weights=None, params={}):
         pass
 
     return loaded_model
+
+
+def get_variables(name_scope):
+    """Gets all variables in the namescope
+    """
+    variables = []
+    for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                 scope=name_scope):
+        variables.append(var)
+    return variables
+
