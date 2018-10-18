@@ -1,4 +1,5 @@
 ---
+section: literature
 category: Multi-Task Learning
 title: "Fully-Adaptive Feature Sharing in MTNs (CVPR'17)"
 type: "MTL"
