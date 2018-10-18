@@ -10,6 +10,7 @@ from utils import config_parser
 from utils.model_utils import load_model, get_variables
 import custom.feeders
 import custom.losses
+import custom.schedulers
 
 
 def _read_model_cfg(cfg):
@@ -106,9 +107,22 @@ def _read_optimizer_op_cfg(cfg):
     if hasattr(tf.train, optimizer_config['definition']):
         optimizer_op = getattr(tf.train, optimizer_config['definition'])
         optimizer_params = optimizer_config['params']
+
+        lr_placeholder = None
+        if 'learning_rate' in optimizer_params:
+            lr_param = optimizer_params['learning_rate']
+            lr_placeholder = tf.placeholder(
+                    shape=(), dtype=tf.float32, name='learning_rate')
+            if isinstance(lr_param, float):
+                lr = lambda epoch: lr_param
+            if isinstance(lr_param, str):
+                lr = getattr(custom.schedulers, lr_param)
+        else:
+            lr = None
+        optimizer_params['learning_rate'] = lr_placeholder
     else:
         raise ValueError
-    return optimizer_op, optimizer_params
+    return optimizer_op, optimizer_params, lr_placeholder, lr
 
 
 def _concatenate_feeders(feeders):
@@ -136,17 +150,19 @@ def _initialize_uninitialized_variables(sess):
     sess.run(init_op)
 
 
-def _prepare_dirs(out_dir):
+def _prepare_dirs(cfg, out_dir):
     """Prepares the output directory structure
     """
-    tensorboard_dir = os.path.join(out_dir, 'tensorboard')
-    checkpoints_dir = os.path.join(out_dir, 'checkpoints')
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir)
+    tensorboard_dir = os.path.join(
+            out_dir, 'tensorboard', cfg['experiment_name'])
+    checkpoints_dir = os.path.join(
+            out_dir, 'checkpoints', cfg['experiment_name'])
+
     if not os.path.isdir(tensorboard_dir):
         os.makedirs(tensorboard_dir)
     if not os.path.isdir(checkpoints_dir):
         os.makedirs(checkpoints_dir)
+
     return tensorboard_dir, checkpoints_dir
 
 
@@ -181,11 +197,13 @@ def train_multitask(config,
     """
     sess = _prepare_environment()
     cfg = config_parser.read_config(config)
-    tensorboard_dir, checkpoints_dir = _prepare_dirs(out_dir)
+    tensorboard_dir, checkpoints_dir = _prepare_dirs(cfg, out_dir)
 
     with tf.name_scope(cfg['model']['definition']):
         inputs, outputs, update_ops, regularizer = _read_model_cfg(cfg)
-    model_saver = tf.train.Saver(get_variables(cfg['model']['definition']))
+    model_saver = tf.train.Saver(
+            get_variables(cfg['model']['definition']),
+            max_to_keep=None)
 
     ground_truths = []
     for output in outputs:
@@ -193,7 +211,7 @@ def train_multitask(config,
         ground_truths.append(y)
 
     training_feeders, validating_feeders = _read_feeders_cfg(cfg, batch_size)
-    optimizer_op, optimizer_params = _read_optimizer_op_cfg(cfg)
+    optimizer_op, optimizer_params, lr_p, lr_s = _read_optimizer_op_cfg(cfg)
     losses = _read_losses_cfg(cfg, outputs, ground_truths, regularizer)
     metrics = _read_metrics_cfg(cfg, outputs, ground_truths)
 
@@ -223,9 +241,9 @@ def train_multitask(config,
         summaries_writer = tf.summary.FileWriter(tensorboard_dir, sess.graph)
         summary_counter = 0
 
-        prev_val_loss_mean = float('inf')
         for epoch in range(n_epochs):
-            print('\nEpoch #{}:'.format(epoch))
+            current_lr = lr_s(epoch)
+            print('\nEpoch #{}: (lr={})'.format(epoch, current_lr))
             np.random.shuffle(train_feeder_idx)
 
             trn_losses = np.zeros(shape=(len(outputs)), dtype=np.float64)
@@ -245,6 +263,8 @@ def train_multitask(config,
                 feed_dict = {inputs[0]: x,
                              ground_truths[idx]: y,
                              K.learning_phase(): 1}
+                if lr_p is not None and lr_s is not None:
+                    feed_dict.update({lr_p: current_lr})
                 out = sess.run(ops_to_run, feed_dict=feed_dict)
 
                 if 'summaries' in out:
@@ -270,10 +290,11 @@ def train_multitask(config,
                 val_losses[idx] += out[0]
                 val_metrics[idx] += out[1:]
 
-            trn_losses /= train_samples
-            trn_metrics /= train_samples
-            val_losses /= val_samples
-            val_metrics /= val_samples
+            for i in range(len(outputs)):
+                trn_losses[i] /= train_samples[i]
+                trn_metrics[i] /= train_samples[i]
+                val_losses[i] /= val_samples[i]
+                val_metrics[i] /= val_samples[i]
 
             for i in range(len(outputs)):
                 print('task #{}:'.format(i))
@@ -284,14 +305,9 @@ def train_multitask(config,
                     val_losses[i],
                     ', '.join(['{:.6f}'.format(x) for x in val_metrics[i]])))
 
-            val_losses_mean = val_losses.mean()
-            if val_losses_mean < prev_val_loss_mean:
-                print('The validation loss mean has improved from {:.6f} to '
-                      '{:.6f}. Saving checkpoints.'.format(prev_val_loss_mean,
-                                                           val_losses_mean))
-                prev_val_loss_mean = val_losses_mean
-                model_saver.save(sess, os.path.join(
-                    checkpoints_dir, 'mtl'), global_step=epoch)
+            model_saver.save(
+                    sess, os.path.join(checkpoints_dir, 'mtl'),
+                    write_meta_graph=False, global_step=epoch)
 
     elif mode == 'joint':
         pass

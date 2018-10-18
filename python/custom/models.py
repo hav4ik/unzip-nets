@@ -45,40 +45,43 @@ def lenet(outputs):
 
 
 def alexnet(outputs):
-    model = tf.keras.models.Sequential()
-    model.add(layers.Input(shape=(32, 32, 3)))
-    model.add(layers.Convolution2D(
-        32, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.Convolution2D(
-        32, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+    img_in = layers.Input(shape=(32, 32, 3))
+    x = layers.Convolution2D(
+        32, (3, 3), kernel_regularizer=None, padding='same')(img_in)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Convolution2D(
+        32, (3, 3), kernel_regularizer=None, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
 
-    model.add(layers.Convolution2D(
-        64, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.Activation('relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Convolution2D(
-        64, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+    x = layers.Convolution2D(
+        64, (3, 3), kernel_regularizer=None, padding='same')(x)
+    x = layers.Activation('relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Convolution2D(
+        64, (3, 3), kernel_regularizer=None, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
 
-    model.add(layers.Convolution2D(
-        128, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.Convolution2D(
-        128, (3, 3), kernel_regularizer=None, padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+    x = layers.Convolution2D(
+        128, (3, 3), kernel_regularizer=None, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Convolution2D(
+        128, (3, 3), kernel_regularizer=None, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
 
-    model.add(layers.Flatten())
-    model.add(layers.Dense(10, activation='softmax'))
+    x = layers.Flatten()(x)
+    ys = []
+    for output in outputs:
+        ys.append(layers.Dense(
+            output['num'], activation='softmax')(x))
+    model = tf.keras.models.Model(inputs=[img_in], outputs=ys)
 
     return (model.inputs, model.outputs,
             _get_keras_update_ops(model), _get_keras_regularizers(model))
