@@ -42,10 +42,6 @@
     ],
     "optimizer": {
         "definition": "AdamOptimizer",
-        "params": {
-            "learning_rate": 0.1,
-            "momentum": 0.4,
-            "use_nesterov": true
-        }
+        "params": {}
     }
 }

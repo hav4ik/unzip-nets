@@ -110,19 +110,16 @@ def _read_optimizer_op_cfg(cfg):
 
         lr_placeholder = None
         if 'learning_rate' in optimizer_params:
-            lr_param = optimizer_params['learning_rate']
-            lr_placeholder = tf.placeholder(
+            if isinstance(optimizer_params['learning_rate'], str):
+                lr_placeholder = tf.placeholder(
                     shape=(), dtype=tf.float32, name='learning_rate')
-            if isinstance(lr_param, float):
-                lr = lambda epoch: lr_param
-            if isinstance(lr_param, str):
-                lr = getattr(custom.schedulers, lr_param)
+                lr_scheduler = getattr(custom.schedulers, lr_param)
+                optimizer_params['learning_rate'] = lr_placeholder
         else:
-            lr = None
-        optimizer_params['learning_rate'] = lr_placeholder
+            lr_scheduler = None
     else:
         raise ValueError
-    return optimizer_op, optimizer_params, lr_placeholder, lr
+    return optimizer_op, optimizer_params, lr_placeholder, lr_scheduler
 
 
 def _concatenate_feeders(feeders):
@@ -155,9 +152,9 @@ def _prepare_dirs(cfg, out_dir):
        uniquely numbered.
     """
     tensorboard_dir = os.path.join(
-            os.expanduser(out_dir), 'tensorboard', cfg['experiment_name'])
+            os.path.expanduser(out_dir), 'tensorboard', cfg['experiment_name'])
     checkpoints_dir = os.path.join(
-            os.expanduser(out_dir), 'checkpoints', cfg['experiment_name'])
+            os.path.expanduser(out_dir), 'checkpoints', cfg['experiment_name'])
 
     for i in range(1001):
         num_tbrd_dir = tensorboard_dir + '{:03d}'.format(i)
@@ -250,7 +247,10 @@ def train_multitask(config,
         summary_counter = 0
 
         for epoch in range(n_epochs):
-            current_lr = lr_s(epoch)
+            if lr_s is not None:
+                current_lr = lr_s(epoch)
+            else:
+                current_lr = 'Auto'
             print('\nEpoch #{}: (lr={})'.format(epoch, current_lr))
             np.random.shuffle(train_feeder_idx)
 
