@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import cv2
 
 
@@ -9,9 +10,10 @@ class toy:
     def __init__(self,
                  batch_size,
                  phase,
-                 dataset,
+                 dataset='mnist',
                  mode='gray',
                  normalization=False,
+                 augmentation=False,
                  size=None,
                  shuffle=False):
         dataset_loader = getattr(tf.keras.datasets, dataset)
@@ -47,15 +49,30 @@ class toy:
             np.random.shuffle(self._indices)
         self.batch_size = batch_size
         self._k = 0
+        self.shuffle = shuffle
+
+        self._augmentation = augmentation
+        if augmentation:
+            generator = ImageDataGenerator(rotation_range=10,
+                                           zoom_range=0.1,
+                                           horizontal_flip=True,
+                                           vertical_flip=False)
+            self.feeder = generator.flow(
+                    self.x, self.y,
+                    batch_size=self.batch_size, shuffle=shuffle)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        if self._k >= self.n:
-            np.random.shuffle(self._indices)
-            self._k = 0
-        x_slice = self.x[self._indices[self._k:self._k+self.batch_size]]
-        y_slice = self.y[self._indices[self._k:self._k+self.batch_size]]
-        self._k += self.batch_size
+        if not self._augmentation:
+            if self._k >= self.n:
+                if self.shuffle:
+                    np.random.shuffle(self._indices)
+                self._k = 0
+            x_slice = self.x[self._indices[self._k:self._k+self.batch_size]]
+            y_slice = self.y[self._indices[self._k:self._k+self.batch_size]]
+            self._k += self.batch_size
+        else:
+            x_slice, y_slice = next(self.feeder)
         return x_slice, y_slice

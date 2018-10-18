@@ -19,9 +19,12 @@
                     "dataset": "cifar10",
                     "mode": "rgb",
                     "size": 32,
-                    "normalization": true
+                    "normalization": true,
+                    "augmentation": true
                 },
-                "training": {"shuffle": true},
+                "training": {
+                    "shuffle": true
+                },
                 "validating": {}
             },
             "attach_to": 0
@@ -35,7 +38,9 @@
                     "size": 32,
                     "normalization": true
                 },
-                "training": {"shuffle": true},
+                "training": {
+                    "shuffle": true
+                },
                 "validating": {}
             },
             "attach_to": 1
@@ -49,7 +54,9 @@
                     "size": 32,
                     "normalization": true
                 },
-                "training": {"shuffle": true},
+                "training": {
+                    "shuffle": true
+                },
                 "validating": {}
             },
             "attach_to": 2
@@ -73,18 +80,9 @@
         }
     ],
     "metrics": [
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 0
-        },
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 1
-        },
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 2
-        }
+        {"definition": "categorical_accuracy", "attach_to": 0},
+        {"definition": "categorical_accuracy", "attach_to": 1},
+        {"definition": "categorical_accuracy", "attach_to": 2}
     ],
     "optimizer": {
         "definition": "MomentumOptimizer",
