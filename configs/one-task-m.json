@@ -1,0 +1,51 @@
+{
+    "experiment_name": "one-task-m",
+    "model": {
+        "definition": "alexnet",
+        "params": {
+            "outputs": [
+                {"name": "mnist_head", "num": 10}
+            ]
+        },
+        "weights": null
+    },
+    "feeders": [
+        {
+            "definition": "toy",
+            "params": {
+                "common": {
+                    "dataset": "mnist",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
+                "training": {
+                    "shuffle": true
+                },
+                "validating": {}
+            },
+            "attach_to": 0
+        }
+    ],
+    "losses": [
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 0
+        }
+    ],
+    "metrics": [
+        {
+            "definition": "categorical_accuracy",
+            "attach_to": 0
+        }
+    ],
+    "optimizer": {
+        "definition": "AdamOptimizer",
+        "params": {
+            "learning_rate": 0.1,
+            "momentum": 0.4,
+            "use_nesterov": true
+        }
+    }
+}

@@ -1,0 +1,71 @@
+{
+    "experiment_name": "two-tasks-mf",
+    "model": {
+        "definition": "alexnet",
+        "params": {
+            "outputs": [
+                {"name": "mnist_head", "num": 10},
+                {"name": "fashion_hean", "num": 10}
+            ]
+        },
+        "weights": null
+    },
+    "feeders": [
+        {
+            "definition": "toy",
+            "params": {
+                "common": {
+                    "dataset": "mnist",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
+                "training": {
+                    "shuffle": true
+                },
+                "validating": {}
+            },
+            "attach_to": 0
+        },
+        {
+            "definition": "toy",
+            "params": {
+                "common": {
+                    "dataset": "fashion_mnist",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
+                "training": {
+                    "shuffle": true
+                },
+                "validating": {}
+            },
+            "attach_to": 1
+        }
+    ],
+    "losses": [
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 0
+        },
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 1
+        }
+    ],
+    "metrics": [
+        {"definition": "categorical_accuracy", "attach_to": 0},
+        {"definition": "categorical_accuracy", "attach_to": 1}
+    ],
+    "optimizer": {
+        "definition": "MomentumOptimizer",
+        "params": {
+            "learning_rate": "step_scheduler",
+            "momentum": 0.4,
+            "use_nesterov": true
+        }
+    }
+}

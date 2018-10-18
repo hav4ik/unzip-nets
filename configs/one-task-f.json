@@ -1,10 +1,10 @@
 {
-    "experiment_name": "one_task",
+    "experiment_name": "one-task-f",
     "model": {
-        "definition": "resnet_20",
+        "definition": "alexnet",
         "params": {
             "outputs": [
-                {"name": "head_1", "num": 10}
+                {"name": "fashion_head", "num": 10}
             ]
         },
         "weights": null
@@ -14,12 +14,14 @@
             "definition": "toy",
             "params": {
                 "common": {
-                    "dataset": "cifar10",
+                    "dataset": "fashion_mnist",
                     "mode": "rgb",
                     "size": 32,
                     "normalization": true
                 },
-                "training": {"shuffle": true},
+                "training": {
+                    "shuffle": true
+                },
                 "validating": {}
             },
             "attach_to": 0
@@ -39,11 +41,7 @@
         }
     ],
     "optimizer": {
-        "definition": "MomentumOptimizer",
-        "params": {
-            "learning_rate": 0.1,
-            "momentum": 0.4,
-            "use_nesterov": true
-        }
+        "definition": "AdamOptimizer",
+        "params": {}
     }
 }

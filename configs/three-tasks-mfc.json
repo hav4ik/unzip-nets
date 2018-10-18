@@ -1,5 +1,5 @@
 {
-    "experiment_name": "three-tasks-000",
+    "experiment_name": "three-tasks",
     "model": {
         "definition": "alexnet",
         "params": {
