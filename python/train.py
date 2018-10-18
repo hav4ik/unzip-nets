@@ -151,19 +151,27 @@ def _initialize_uninitialized_variables(sess):
 
 
 def _prepare_dirs(cfg, out_dir):
-    """Prepares the output directory structure
+    """Prepares the output directory structure; the directory is
+       uniquely numbered.
     """
     tensorboard_dir = os.path.join(
-            out_dir, 'tensorboard', cfg['experiment_name'])
+            os.expanduser(out_dir), 'tensorboard', cfg['experiment_name'])
     checkpoints_dir = os.path.join(
-            out_dir, 'checkpoints', cfg['experiment_name'])
+            os.expanduser(out_dir), 'checkpoints', cfg['experiment_name'])
 
-    if not os.path.isdir(tensorboard_dir):
-        os.makedirs(tensorboard_dir)
-    if not os.path.isdir(checkpoints_dir):
-        os.makedirs(checkpoints_dir)
+    for i in range(1001):
+        num_tbrd_dir = tensorboard_dir + '{:03d}'.format(i)
+        num_ckpt_dir = checkpoints_dir + '{:03d}'.format(i)
+        if not os.path.isdir(num_tbrd_dir) and not os.path.isdir(num_ckpt_dir):
+            break
+    if i == 1000:
+        raise NameError('There are 999 experiments with the same name already.'
+                        ' Please use another name for your experiments.')
 
-    return tensorboard_dir, checkpoints_dir
+    os.makedirs(num_tbrd_dir)
+    os.makedirs(num_ckpt_dir)
+
+    return num_tbrd_dir, num_ckpt_dir
 
 
 def _l2_filter_norm(t):
