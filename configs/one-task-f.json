@@ -1,5 +1,8 @@
 {
     "experiment_name": "one-task-f",
+    "tasks": {
+        {"name": "fashion"}
+    },
     "model": {
         "definition": "alexnet",
         "params": {
@@ -20,7 +23,8 @@
                     "normalization": true
                 },
                 "training": {
-                    "shuffle": true
+                    "shuffle": true,
+                    "augmentation": true
                 },
                 "validating": {}
             },
@@ -35,10 +39,7 @@
         }
     ],
     "metrics": [
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 0
-        }
+        {"definition": "categorical_accuracy", "attach_to": 0}
     ],
     "optimizer": {
         "definition": "AdamOptimizer",

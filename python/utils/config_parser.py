@@ -42,7 +42,7 @@ def read_config(config):
 
     required_keys = {
             'experiment_name': str, 'model': dict, 'metrics': list,
-            'feeders': list, 'losses': list}
+            'feeders': list, 'losses': list, 'tasks': list}
     for k, t in required_keys.items():
         if k not in config:
             raise ValueError
@@ -50,6 +50,16 @@ def read_config(config):
             raise ValueError
 
     return config
+
+
+def get_tasks_info(cfg):
+    """Reads the tasks names and additional info (if relevant)
+    """
+    tasks_info = cfg['tasks']
+    tasks_names = []
+    for task in tasks_info:
+        tasks_names.append(task['name'])
+    return tasks_names
 
 
 def import_model_from_cfg(sess, cfg):
@@ -98,7 +108,11 @@ def import_feeders_from_cfg(cfg, batch_size):
     return training_feeders, validating_feeders
 
 
-def import_losses_from_cfg(cfg, outputs, ground_truths, regularizer):
+def import_losses_from_cfg(cfg,
+                           outputs,
+                           ground_truths,
+                           regularizer,
+                           tasks_names):
     """Read loss functions definitions from configuration dictionary
     """
     loss_defs = []
@@ -118,8 +132,9 @@ def import_losses_from_cfg(cfg, outputs, ground_truths, regularizer):
     accumulators = [None] * len(outputs)
     averages = [None] * len(outputs)
     resetters = [None] * len(outputs)
-    with tf.variable_scope('losses'):
-        for loss_def in loss_defs:
+    for loss_def in loss_defs:
+        with tf.variable_scope(
+                'losses/{}_loss'.format(tasks_names[loss_def.attach_to])):
             losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
                 ground_truths[loss_def.attach_to],
                 outputs[loss_def.attach_to]))
@@ -136,7 +151,7 @@ def import_losses_from_cfg(cfg, outputs, ground_truths, regularizer):
     return losses, accumulators, resetters, averages
 
 
-def import_metrics_from_cfg(cfg, outputs, ground_truths):
+def import_metrics_from_cfg(cfg, outputs, ground_truths, tasks_names):
     """Read metrics definitions from configuration dictionary
     """
     metrics_defs = []
@@ -155,8 +170,11 @@ def import_metrics_from_cfg(cfg, outputs, ground_truths):
     accumulators = [[] for i in range(len(outputs))]
     averages = [[] for i in range(len(outputs))]
     resetters = [[] for i in range(len(outputs))]
-    with tf.variable_scope('metrics'):
-        for metrics_def in metrics_defs:
+    for metrics_def in metrics_defs:
+        with tf.variable_scope(
+                'metrics/{}_metrics'.format(
+                    tasks_names[metrics_def.attach_to])):
+
             m = tf.reduce_mean(metrics_def.metrics(
                 ground_truths[metrics_def.attach_to],
                 outputs[metrics_def.attach_to]))

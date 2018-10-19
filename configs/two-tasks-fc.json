@@ -1,11 +1,15 @@
 {
-    "experiment_name": "two-tasks",
+    "experiment_name": "two-tasks-fc",
+    "tasks": {
+        {"name": "cifar"},
+        {"name": "fashion"}
+    },
     "model": {
         "definition": "alexnet",
         "params": {
             "outputs": [
                 {"name": "cifar_head", "num": 10},
-                {"name": "fashion_hean", "num": 10}
+                {"name": "fashion_head", "num": 10}
             ]
         },
         "weights": null

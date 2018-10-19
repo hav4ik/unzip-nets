@@ -1,5 +1,8 @@
 {
     "experiment_name": "one-task-m",
+    "tasks": [
+        {"name": "mnist"}
+    ],
     "model": {
         "definition": "alexnet",
         "params": {
@@ -35,10 +38,7 @@
         }
     ],
     "metrics": [
-        {
-            "definition": "categorical_accuracy",
-            "attach_to": 0
-        }
+        {"definition": "categorical_accuracy", "attach_to": 0}
     ],
     "optimizer": {
         "definition": "AdamOptimizer",

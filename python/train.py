@@ -60,37 +60,37 @@ def _prepare_environment():
     return sess
 
 
-def _make_summaries(outputs, metrics_avg, loss_avg):
+def _make_summaries(outputs, metrics_avg, loss_avg, tasks_names):
     train_epoch_summary_list = []
     for idx in range(len(outputs)):
         for m_idx in range(len(metrics_avg[idx])):
             train_epoch_summary_list.append(tf.summary.scalar(
-                'train/task_{}/metrics_{}'.format(idx, m_idx),
+                'train/{}/metrics_{}'.format(tasks_names[idx], m_idx),
                 metrics_avg[idx][m_idx]))
         train_epoch_summary_list.append(tf.summary.scalar(
-            'train/task_{}/loss'.format(idx), loss_avg[idx]))
+            'train/{}/loss'.format(tasks_names[idx]), loss_avg[idx]))
     train_epoch_summary = tf.summary.merge(train_epoch_summary_list)
 
     val_epoch_summary_list = []
     for idx in range(len(outputs)):
         for m_idx in range(len(metrics_avg[idx])):
             val_epoch_summary_list.append(tf.summary.scalar(
-                'val/task_{}/metrics_{}'.format(idx, m_idx),
+                'val/{}/metrics_{}'.format(tasks_names[idx], m_idx),
                 metrics_avg[idx][m_idx]))
         val_epoch_summary_list.append(tf.summary.scalar(
-            'val/task_{}/loss'.format(idx), loss_avg[idx]))
+            'val/{}/loss'.format(tasks_names[idx]), loss_avg[idx]))
     val_epoch_summary = tf.summary.merge(val_epoch_summary_list)
 
     return train_epoch_summary, val_epoch_summary
 
 
-def _prepare_feeder_placeholders(outputs):
+def _prepare_feeder_placeholders(outputs, tasks_names):
     with tf.variable_scope('feeders'):
         ground_truths = []
         for idx in range(len(outputs)):
             y = tf.placeholder(
                     shape=outputs[idx].get_shape(), dtype=tf.float32,
-                    name='task_{}_feeder'.format(idx))
+                    name='{}_feeder'.format(tasks_names[idx]))
             ground_truths.append(y)
     return ground_truths
 
@@ -115,10 +115,11 @@ def train_multitask(config,
     cfg = config_parser.read_config(config)
     tensorboard_dir, checkpoints_dir = _prepare_dirs(cfg, out_dir)
 
+    tasks_names = config_parser.get_tasks_info(cfg)
     inputs, outputs, update_ops, regularizer, model_saver = \
         config_parser.import_model_from_cfg(sess, cfg)
 
-    ground_truths = _prepare_feeder_placeholders(outputs)
+    ground_truths = _prepare_feeder_placeholders(outputs, tasks_names)
     training_feeders, validating_feeders = \
         config_parser.import_feeders_from_cfg(cfg, batch_size)
     optimizer_op, optimizer_params, lr_p, lr_s = \
@@ -126,9 +127,10 @@ def train_multitask(config,
 
     losses, loss_accum, loss_reset, loss_avg = \
         config_parser.import_losses_from_cfg(
-                cfg, outputs, ground_truths, regularizer)
+                cfg, outputs, ground_truths, regularizer, tasks_names)
     metrics, metrics_accum, metrics_reset, metrics_avg = \
-        config_parser.import_metrics_from_cfg(cfg, outputs, ground_truths)
+        config_parser.import_metrics_from_cfg(
+                cfg, outputs, ground_truths, tasks_names)
     loss_and_metric_reset_ops = (loss_reset, metrics_reset)
     loss_and_metric_avg_ops = (loss_avg, metrics_avg)
 
@@ -142,19 +144,20 @@ def train_multitask(config,
 
         gradients = []
         targets = []
-        for loss in losses:
-            with tf.variable_scope('optimizers'):
-                with tf.control_dependencies(update_ops):
-                    optimizer = optimizer_op(**optimizer_params)
-                    grads_and_vars = optimizer.compute_gradients(loss=loss)
-                    gradients.append(grads_and_vars)
-                    targets.append(optimizer.apply_gradients(grads_and_vars))
-
+        for idx in range(len(outputs)):
+            with tf.variable_scope(
+                    'optimizers/{}_optimizer'.format(tasks_names[idx])), \
+                    tf.control_dependencies(update_ops):
+                optimizer = optimizer_op(**optimizer_params)
+                loss = losses[idx]
+                grads_and_vars = optimizer.compute_gradients(loss=loss)
+                gradients.append(grads_and_vars)
+                targets.append(optimizer.apply_gradients(grads_and_vars))
         graph_utils.initialize_uninitialized_variables(sess)
 
         with tf.variable_scope('summaries'):
             train_epoch_summary, val_epoch_summary = _make_summaries(
-                    outputs, metrics_avg, loss_avg)
+                    outputs, metrics_avg, loss_avg, tasks_names)
             histogram_summary_list = []
             for g, v in gradients[0]:
                 if g is None:
