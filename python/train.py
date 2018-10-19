@@ -60,6 +60,41 @@ def _prepare_environment():
     return sess
 
 
+def _make_summaries(outputs, metrics_avg, loss_avg):
+    train_epoch_summary_list = []
+    for idx in range(len(outputs)):
+        for m_idx in range(len(metrics_avg[idx])):
+            train_epoch_summary_list.append(tf.summary.scalar(
+                'train/task_{}/metrics_{}'.format(idx, m_idx),
+                metrics_avg[idx][m_idx]))
+        train_epoch_summary_list.append(tf.summary.scalar(
+            'train/task_{}/loss'.format(idx), loss_avg[idx]))
+    train_epoch_summary = tf.summary.merge(train_epoch_summary_list)
+
+    val_epoch_summary_list = []
+    for idx in range(len(outputs)):
+        for m_idx in range(len(metrics_avg[idx])):
+            val_epoch_summary_list.append(tf.summary.scalar(
+                'val/task_{}/metrics_{}'.format(idx, m_idx),
+                metrics_avg[idx][m_idx]))
+        val_epoch_summary_list.append(tf.summary.scalar(
+            'val/task_{}/loss'.format(idx), loss_avg[idx]))
+    val_epoch_summary = tf.summary.merge(val_epoch_summary_list)
+
+    return train_epoch_summary, val_epoch_summary
+
+
+def _prepare_feeder_placeholders(outputs):
+    with tf.variable_scope('feeders'):
+        ground_truths = []
+        for idx in range(len(outputs)):
+            y = tf.placeholder(
+                    shape=outputs[idx].get_shape(), dtype=tf.float32,
+                    name='task_{}_feeder'.format(idx))
+            ground_truths.append(y)
+    return ground_truths
+
+
 def train_multitask(config,
                     batch_size,
                     n_epochs,
@@ -83,11 +118,7 @@ def train_multitask(config,
     inputs, outputs, update_ops, regularizer, model_saver = \
         config_parser.import_model_from_cfg(sess, cfg)
 
-    ground_truths = []
-    for output in outputs:
-        y = tf.placeholder(shape=output.get_shape(), dtype=tf.float32)
-        ground_truths.append(y)
-
+    ground_truths = _prepare_feeder_placeholders(outputs)
     training_feeders, validating_feeders = \
         config_parser.import_feeders_from_cfg(cfg, batch_size)
     optimizer_op, optimizer_params, lr_p, lr_s = \
@@ -112,23 +143,26 @@ def train_multitask(config,
         gradients = []
         targets = []
         for loss in losses:
-            with tf.control_dependencies(update_ops):
-                optimizer = optimizer_op(**optimizer_params)
-                grads_and_vars = optimizer.compute_gradients(loss=loss)
-                gradients.append(grads_and_vars)
-                targets.append(optimizer.apply_gradients(grads_and_vars))
+            with tf.variable_scope('optimizers'):
+                with tf.control_dependencies(update_ops):
+                    optimizer = optimizer_op(**optimizer_params)
+                    grads_and_vars = optimizer.compute_gradients(loss=loss)
+                    gradients.append(grads_and_vars)
+                    targets.append(optimizer.apply_gradients(grads_and_vars))
 
         graph_utils.initialize_uninitialized_variables(sess)
 
-        with tf.name_scope('summaries'):
+        with tf.variable_scope('summaries'):
+            train_epoch_summary, val_epoch_summary = _make_summaries(
+                    outputs, metrics_avg, loss_avg)
+            histogram_summary_list = []
             for g, v in gradients[0]:
                 if g is None:
                     continue
-                tf.summary.histogram("variables/" + v.name, _l2_filter_norm(v))
-
-            summaries_op = tf.summary.merge_all()
-            summaries_writer = tf.summary.FileWriter(tensorboard_dir,
-                                                     sess.graph)
+                histogram_summary_list.append(tf.summary.histogram(
+                    "variables/" + v.name, _l2_filter_norm(v)))
+            histogram_summary = tf.summary.merge(histogram_summary_list)
+        summary_writer = tf.summary.FileWriter(tensorboard_dir, sess.graph)
 
         for epoch in range(n_epochs):
             if lr_s is not None:
@@ -151,7 +185,11 @@ def train_multitask(config,
                 if lr_p is not None and lr_s is not None:
                     feed_dict.update({lr_p: current_lr})
                 sess.run(ops_to_run, feed_dict=feed_dict)
-            trn_losses, trn_metrics = sess.run(loss_and_metric_avg_ops)
+            out = sess.run({
+                'loss_n_metrics': loss_and_metric_avg_ops,
+                'train_summary': train_epoch_summary})
+            trn_losses, trn_metrics = out['loss_n_metrics']
+            summary_writer.add_summary(out['train_summary'], epoch)
 
             val_idxs = tqdm(val_feeder_idx[:], desc='val')
             sess.run(loss_and_metric_reset_ops)
@@ -163,9 +201,13 @@ def train_multitask(config,
                              ground_truths[idx]: y,
                              K.learning_phase(): 0}
                 sess.run(ops_to_run, feed_dict=feed_dict)
-            val_losses, val_metrics = sess.run(loss_and_metric_avg_ops)
-
-            summaries_writer.add_summary(sess.run(summaries_op), epoch)
+            out = sess.run({
+                'hist_summary': histogram_summary,
+                'loss_n_metrics': loss_and_metric_avg_ops,
+                'val_summary': val_epoch_summary})
+            val_losses, val_metrics = out['loss_n_metrics']
+            summary_writer.add_summary(out['val_summary'], epoch)
+            summary_writer.add_summary(out['hist_summary'], epoch)
 
             for i in range(len(outputs)):
                 print('task #{}:'.format(i))
@@ -177,8 +219,10 @@ def train_multitask(config,
                     ', '.join(['{:.6f}'.format(x) for x in val_metrics[i]])))
 
             model_saver.save(
-                    sess, os.path.join(checkpoints_dir, 'mtl'),
+                    sess, os.path.join(checkpoints_dir, 'epoch'),
                     write_meta_graph=False, global_step=epoch)
+
+        model_saver.save(sess, os.path.join(checkpoints_dir, 'final_model'))
 
     else:
         raise NameError('Training mode "{}" not supported yet.'.format(mode))

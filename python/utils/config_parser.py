@@ -56,15 +56,16 @@ def import_model_from_cfg(sess, cfg):
     """Reads model configuration from config dictionary
     """
     model_config = cfg['model']
-    with tf.name_scope(model_config['definition']):
+    with tf.variable_scope(model_config['definition']):
         inputs, outputs, update_ops, regulizer = load_model(
                 model_config['definition'],
                 model_config['weights'],
                 model_config['params'])
 
-    model_saver = tf.train.Saver(
-            get_variables(model_config['definition']),
-            max_to_keep=None)
+    with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
+        model_saver = tf.train.Saver(
+                get_variables(model_config['definition']),
+                max_to_keep=None)
 
     if model_config['weights'] is not None:
         weights_path = os.path.expanduser(model_config['weights'])
@@ -117,7 +118,7 @@ def import_losses_from_cfg(cfg, outputs, ground_truths, regularizer):
     accumulators = [None] * len(outputs)
     averages = [None] * len(outputs)
     resetters = [None] * len(outputs)
-    with tf.name_scope('losses'):
+    with tf.variable_scope('losses'):
         for loss_def in loss_defs:
             losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
                 ground_truths[loss_def.attach_to],
@@ -154,7 +155,7 @@ def import_metrics_from_cfg(cfg, outputs, ground_truths):
     accumulators = [[] for i in range(len(outputs))]
     averages = [[] for i in range(len(outputs))]
     resetters = [[] for i in range(len(outputs))]
-    with tf.name_scope('metrics'):
+    with tf.variable_scope('metrics'):
         for metrics_def in metrics_defs:
             m = tf.reduce_mean(metrics_def.metrics(
                 ground_truths[metrics_def.attach_to],

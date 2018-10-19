@@ -44,10 +44,11 @@ def initialize_uninitialized_variables(sess):
     """Initialize uninitialized variables (all variables except those
        that already have weight)
     """
-    uninitialized_names = sess.run(tf.report_uninitialized_variables())
-    for i in range(len(uninitialized_names)):
-        uninitialized_names[i] = uninitialized_names[i].decode('utf-8')
-    init_op = tf.variables_initializer(
-        [v for v in tf.global_variables()
-            if v.name.split(':')[0] in uninitialized_names])
+    with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
+        uninitialized_names = sess.run(tf.report_uninitialized_variables())
+        for i in range(len(uninitialized_names)):
+            uninitialized_names[i] = uninitialized_names[i].decode('utf-8')
+            init_op = tf.variables_initializer(
+                [v for v in tf.global_variables()
+                    if v.name.split(':')[0] in uninitialized_names])
     sess.run(init_op)
