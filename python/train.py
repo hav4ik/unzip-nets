@@ -20,15 +20,15 @@ def _read_model_cfg(sess, cfg):
     with tf.name_scope(model_config['definition']):
         inputs, outputs, update_ops, regulizer = load_model(
                 model_config['definition'],
-                model_config['weight'],
+                model_config['weights'],
                 model_config['params'])
 
     model_saver = tf.train.Saver(
             get_variables(model_config['definition']),
             max_to_keep=None)
 
-    if model_config['weight'] is not None:
-        weights_path = os.path.expanduser(model_config['weight'])
+    if model_config['weights'] is not None:
+        weights_path = os.path.expanduser(model_config['weights'])
         if os.path.isdir(weights_path):
             weights_path = tf.train.latest_checkpoint(weights_path)
         print('\nRestoring model from {}'.format(weights_path))

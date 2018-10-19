@@ -66,7 +66,7 @@ class toy:
 
     def __next__(self):
         if not self._augmentation:
-            if self._k >= self.n:
+            if self._k + self.batch_size > self.n:
                 if self.shuffle:
                     np.random.shuffle(self._indices)
                 self._k = 0
