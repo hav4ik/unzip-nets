@@ -7,166 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 
 from utils import config_parser
-from utils.model_utils import load_model, get_variables
-import custom.feeders
-import custom.losses
-import custom.schedulers
-
-
-def _read_model_cfg(sess, cfg):
-    """Reads model configuration from config dictionary
-    """
-    model_config = cfg['model']
-    with tf.name_scope(model_config['definition']):
-        inputs, outputs, update_ops, regulizer = load_model(
-                model_config['definition'],
-                model_config['weights'],
-                model_config['params'])
-
-    model_saver = tf.train.Saver(
-            get_variables(model_config['definition']),
-            max_to_keep=None)
-
-    if model_config['weights'] is not None:
-        weights_path = os.path.expanduser(model_config['weights'])
-        if os.path.isdir(weights_path):
-            weights_path = tf.train.latest_checkpoint(weights_path)
-        print('\nRestoring model from {}'.format(weights_path))
-        model_saver.restore(sess, weights_path)
-
-    return inputs, outputs, update_ops, regulizer, model_saver
-
-
-def _read_feeders_cfg(cfg, batch_size):
-    """Reads feeder configurations from config dictionary
-    """
-    training_feeders = []
-    validating_feeders = []
-    for feeder_config in cfg['feeders']:
-        common = feeder_config['params']['common']
-        training_cfg = feeder_config['params']['training']
-        validating_cfg = feeder_config['params']['validating']
-        training_cfg.update(common)
-        validating_cfg.update(common)
-        feeder = getattr(custom.feeders, feeder_config['definition'])
-
-        training_feeders.append(
-            feeder(batch_size, 'training', **training_cfg))
-        validating_feeders.append(
-            feeder(batch_size, 'validating', **validating_cfg))
-
-    return training_feeders, validating_feeders
-
-
-def _build_accumulator(op):
-    """For updating and averaging gradients, metrics, losses, etc.
-       over the whole dataset.
-    """
-    total = tf.Variable(0., name='total')
-    counter = tf.Variable(0., name='counter')
-    accumulator_op = tf.group(
-            tf.assign_add(total, op),
-            tf.assign_add(counter, 1))
-    resetter_op = tf.group(
-            tf.assign(total, 0),
-            tf.assign(counter, 0))
-    average = total / counter + 1e-8
-    return accumulator_op, resetter_op, average
-
-
-def _read_losses_cfg(cfg, outputs, ground_truths, regularizer):
-    """Read loss functions definitions from configuration dictionary
-    """
-    loss_defs = []
-    for loss_config in cfg['losses']:
-        if hasattr(tf.keras.losses, loss_config['definition']):
-            loss = getattr(tf.keras.losses, loss_config['definition'])
-        elif hasattr(custom.losses, loss_config['definition']):
-            loss = getattr(custom.losses, loss_config['definition'])
-        else:
-            raise ValueError
-        loss_def = {'loss': loss,
-                    'attach_to': loss_config['attach_to'],
-                    'coeff': loss_config['coeff']}
-        loss_defs.append(config_parser.dict2obj(loss_def))
-
-    losses = [None] * len(outputs)
-    accumulators = [None] * len(outputs)
-    averages = [None] * len(outputs)
-    resetters = [None] * len(outputs)
-    with tf.name_scope('losses'):
-        for loss_def in loss_defs:
-            losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
-                ground_truths[loss_def.attach_to],
-                outputs[loss_def.attach_to]))
-            losses[loss_def.attach_to] *= loss_def.coeff
-            if regularizer is not None:
-                losses[loss_def.attach_to] += regularizer
-
-            accumulator, resetter, average = _build_accumulator(
-                    losses[loss_def.attach_to])
-            accumulators[loss_def.attach_to] = accumulator
-            resetters[loss_def.attach_to] = resetter
-            averages[loss_def.attach_to] = average
-
-    return losses, accumulators, resetters, averages
-
-
-def _read_metrics_cfg(cfg, outputs, ground_truths):
-    """Read metrics definitions from configuration dictionary
-    """
-    metrics_defs = []
-    for metrics_config in cfg['metrics']:
-        if hasattr(tf.keras.metrics, metrics_config['definition']):
-            metrics = getattr(tf.keras.metrics, metrics_config['definition'])
-        elif hasattr(custom.metrics, metrics_config['definition']):
-            metrics = getattr(custom.metrics, metrics_config['definition'])
-        else:
-            raise ValueError
-        metrics_def = {'metrics': metrics,
-                       'attach_to': metrics_config['attach_to']}
-        metrics_defs.append(config_parser.dict2obj(metrics_def))
-
-    metrics = [[] for i in range(len(outputs))]
-    accumulators = [[] for i in range(len(outputs))]
-    averages = [[] for i in range(len(outputs))]
-    resetters = [[] for i in range(len(outputs))]
-    with tf.name_scope('metrics'):
-        for metrics_def in metrics_defs:
-            m = tf.reduce_mean(metrics_def.metrics(
-                ground_truths[metrics_def.attach_to],
-                outputs[metrics_def.attach_to]))
-            metrics[metrics_def.attach_to].append(m)
-
-            accumulator, resetter, average = _build_accumulator(m)
-            accumulators[metrics_def.attach_to].append(accumulator)
-            averages[metrics_def.attach_to].append(average)
-            resetters[metrics_def.attach_to].append(resetter)
-
-    return metrics, accumulators, resetters, averages
-
-
-def _read_optimizer_op_cfg(cfg):
-    """Loads optimizer ops from keras or custom module
-    """
-    optimizer_config = cfg['optimizer']
-    if hasattr(tf.train, optimizer_config['definition']):
-        optimizer_op = getattr(tf.train, optimizer_config['definition'])
-        optimizer_params = optimizer_config['params']
-
-        lr_placeholder = None
-        if 'learning_rate' in optimizer_params:
-            if isinstance(optimizer_params['learning_rate'], str):
-                lr_placeholder = tf.placeholder(
-                    shape=(), dtype=tf.float32, name='learning_rate')
-                lr_scheduler = getattr(custom.schedulers,
-                                       optimizer_params['learning_rate'])
-                optimizer_params['learning_rate'] = lr_placeholder
-        else:
-            lr_scheduler = None
-    else:
-        raise ValueError
-    return optimizer_op, optimizer_params, lr_placeholder, lr_scheduler
+from utils import graph_utils
 
 
 def _concatenate_feeders(feeders):
@@ -179,19 +20,6 @@ def _concatenate_feeders(feeders):
         feeder_idx[accumulated:accumulated+n_samples[i]] = i
         accumulated += n_samples[i]
     return feeder_idx, n_samples
-
-
-def _initialize_uninitialized_variables(sess):
-    """Initialize uninitialized variables (all variables except those
-       that already have weight)
-    """
-    uninitialized_names = sess.run(tf.report_uninitialized_variables())
-    for i in range(len(uninitialized_names)):
-        uninitialized_names[i] = uninitialized_names[i].decode('utf-8')
-    init_op = tf.variables_initializer(
-        [v for v in tf.global_variables()
-            if v.name.split(':')[0] in uninitialized_names])
-    sess.run(init_op)
 
 
 def _prepare_dirs(cfg, out_dir):
@@ -252,21 +80,24 @@ def train_multitask(config,
     cfg = config_parser.read_config(config)
     tensorboard_dir, checkpoints_dir = _prepare_dirs(cfg, out_dir)
 
-    (inputs, outputs, update_ops,
-        regularizer, model_saver) = _read_model_cfg(sess, cfg)
+    inputs, outputs, update_ops, regularizer, model_saver = \
+            config_parser.import_model_from_cfg(sess, cfg)
 
     ground_truths = []
     for output in outputs:
         y = tf.placeholder(shape=output.get_shape(), dtype=tf.float32)
         ground_truths.append(y)
 
-    training_feeders, validating_feeders = _read_feeders_cfg(cfg, batch_size)
-    optimizer_op, optimizer_params, lr_p, lr_s = _read_optimizer_op_cfg(cfg)
+    training_feeders, validating_feeders = \
+            config_parser.import_feeders_from_cfg(cfg, batch_size)
+    optimizer_op, optimizer_params, lr_p, lr_s = \
+            config_parser.import_optimizers_from_cfg(cfg)
 
-    losses, loss_accum, loss_reset, loss_avg = _read_losses_cfg(
-            cfg, outputs, ground_truths, regularizer)
-    metrics, metrics_accum, metrics_reset, metrics_avg = _read_metrics_cfg(
-            cfg, outputs, ground_truths)
+    losses, loss_accum, loss_reset, loss_avg = \
+            config_parser.import_losses_from_cfg(cfg,
+                    outputs, ground_truths, regularizer)
+    metrics, metrics_accum, metrics_reset, metrics_avg = \
+            config_parser.import_metrics_from_cfg(cfg, outputs, ground_truths)
     loss_and_metric_reset_ops = (loss_reset, metrics_reset)
     loss_and_metric_avg_ops = (loss_avg, metrics_avg)
 
@@ -287,7 +118,7 @@ def train_multitask(config,
                 gradients.append(grads_and_vars)
                 targets.append(optimizer.apply_gradients(grads_and_vars))
 
-        _initialize_uninitialized_variables(sess)
+        graph_utils.initialize_uninitialized_variables(sess)
 
         with tf.name_scope('summaries'):
             for g, v in gradients[0]:

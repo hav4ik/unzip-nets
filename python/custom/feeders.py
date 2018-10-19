@@ -61,6 +61,8 @@ class toy:
                     self.x, self.y,
                     batch_size=self.batch_size, shuffle=shuffle)
 
+        self._name = dataset
+
     def __iter__(self):
         return self
 
@@ -76,3 +78,9 @@ class toy:
         else:
             x_slice, y_slice = next(self.feeder)
         return x_slice, y_slice
+
+    def __str__(self):
+        return self._name
+
+    def __repr__(self):
+        return self._name
