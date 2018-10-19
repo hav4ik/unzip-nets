@@ -1,8 +1,8 @@
 {
     "experiment_name": "one-task-c",
-    "tasks": {
+    "tasks": [
         {"name": "cifar"}
-    },
+    ],
     "model": {
         "definition": "alexnet",
         "params": {

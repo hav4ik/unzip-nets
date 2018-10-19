@@ -1,10 +1,10 @@
 {
     "experiment_name": "three-tasks",
-    "tasks": {
+    "tasks": [
         {"name": "cifar"},
         {"name": "mnist"},
         {"name": "fashion"}
-    },
+    ],
     "model": {
         "definition": "alexnet",
         "params": {

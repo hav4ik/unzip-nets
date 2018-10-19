@@ -1,9 +1,9 @@
 {
     "experiment_name": "two-tasks-fc",
-    "tasks": {
+    "tasks": [
         {"name": "cifar"},
         {"name": "fashion"}
-    },
+    ],
     "model": {
         "definition": "alexnet",
         "params": {
