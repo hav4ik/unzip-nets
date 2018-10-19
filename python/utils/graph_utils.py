@@ -1,7 +1,4 @@
-import os
-import numpy as numpy
 import tensorflow as tf
-
 import custom.models
 
 
@@ -41,29 +38,6 @@ def build_op_accumulator(op):
             tf.assign(counter, 0))
     average = total / counter + 1e-8
     return accumulator_op, resetter_op, average
-
-
-def import_optimizers_from_cfg(cfg):
-    """Loads optimizer ops from keras or custom module
-    """
-    optimizer_config = cfg['optimizer']
-    if hasattr(tf.train, optimizer_config['definition']):
-        optimizer_op = getattr(tf.train, optimizer_config['definition'])
-        optimizer_params = optimizer_config['params']
-
-        lr_placeholder = None
-        if 'learning_rate' in optimizer_params:
-            if isinstance(optimizer_params['learning_rate'], str):
-                lr_placeholder = tf.placeholder(
-                    shape=(), dtype=tf.float32, name='learning_rate')
-                lr_scheduler = getattr(custom.schedulers,
-                                       optimizer_params['learning_rate'])
-                optimizer_params['learning_rate'] = lr_placeholder
-        else:
-            lr_scheduler = None
-    else:
-        raise ValueError
-    return optimizer_op, optimizer_params, lr_placeholder, lr_scheduler
 
 
 def initialize_uninitialized_variables(sess):

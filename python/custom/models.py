@@ -41,7 +41,7 @@ def lenet(outputs):
     model = tf.keras.models.Model(inputs=[inputs], outputs=ys)
 
     return (model.inputs, model.outputs,
-           _get_keras_update_pos(model), _get_keras_regularizers(model))
+            _get_keras_update_ops(model), _get_keras_regularizers(model))
 
 
 def alexnet(outputs):

@@ -40,10 +40,11 @@ def read_config(config):
         config = open(config, 'r').read()
     config = json.loads(config)
 
-    required_keys = {'experiment_name': str, 'model': dict, 'metrics': list,
+    required_keys = {
+            'experiment_name': str, 'model': dict, 'metrics': list,
             'feeders': list, 'losses': list}
     for k, t in required_keys.items():
-        if not k in config:
+        if k not in config:
             raise ValueError
         if not isinstance(config[k], t):
             raise ValueError
@@ -189,5 +190,3 @@ def import_optimizers_from_cfg(cfg):
     else:
         raise ValueError
     return optimizer_op, optimizer_params, lr_placeholder, lr_scheduler
-
-

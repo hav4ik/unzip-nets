@@ -81,7 +81,7 @@ def train_multitask(config,
     tensorboard_dir, checkpoints_dir = _prepare_dirs(cfg, out_dir)
 
     inputs, outputs, update_ops, regularizer, model_saver = \
-            config_parser.import_model_from_cfg(sess, cfg)
+        config_parser.import_model_from_cfg(sess, cfg)
 
     ground_truths = []
     for output in outputs:
@@ -89,15 +89,15 @@ def train_multitask(config,
         ground_truths.append(y)
 
     training_feeders, validating_feeders = \
-            config_parser.import_feeders_from_cfg(cfg, batch_size)
+        config_parser.import_feeders_from_cfg(cfg, batch_size)
     optimizer_op, optimizer_params, lr_p, lr_s = \
-            config_parser.import_optimizers_from_cfg(cfg)
+        config_parser.import_optimizers_from_cfg(cfg)
 
     losses, loss_accum, loss_reset, loss_avg = \
-            config_parser.import_losses_from_cfg(cfg,
-                    outputs, ground_truths, regularizer)
+        config_parser.import_losses_from_cfg(
+                cfg, outputs, ground_truths, regularizer)
     metrics, metrics_accum, metrics_reset, metrics_avg = \
-            config_parser.import_metrics_from_cfg(cfg, outputs, ground_truths)
+        config_parser.import_metrics_from_cfg(cfg, outputs, ground_truths)
     loss_and_metric_reset_ops = (loss_reset, metrics_reset)
     loss_and_metric_avg_ops = (loss_avg, metrics_avg)
 
@@ -150,7 +150,7 @@ def train_multitask(config,
                              K.learning_phase(): 1}
                 if lr_p is not None and lr_s is not None:
                     feed_dict.update({lr_p: current_lr})
-                out = sess.run(ops_to_run, feed_dict=feed_dict)
+                sess.run(ops_to_run, feed_dict=feed_dict)
             trn_losses, trn_metrics = sess.run(loss_and_metric_avg_ops)
 
             val_idxs = tqdm(val_feeder_idx[:], desc='val')
@@ -162,7 +162,7 @@ def train_multitask(config,
                 feed_dict = {inputs[0]: x,
                              ground_truths[idx]: y,
                              K.learning_phase(): 0}
-                out = sess.run(ops_to_run, feed_dict=feed_dict)
+                sess.run(ops_to_run, feed_dict=feed_dict)
             val_losses, val_metrics = sess.run(loss_and_metric_avg_ops)
 
             summaries_writer.add_summary(sess.run(summaries_op), epoch)
