@@ -2,7 +2,8 @@ import json
 import os
 import tensorflow as tf
 
-from utils.graph_utils import build_op_accumulator, get_variables, load_model
+from utils.graph_utils import ModelMeta, LossMeta, MetricsMeta
+
 import custom.feeders
 import custom.losses
 import custom.metrics
@@ -49,7 +50,7 @@ def read_config(config):
         if not isinstance(config[k], t):
             raise ValueError
 
-    return config
+    return config['experiment_name'], config
 
 
 def get_tasks_info(cfg):
@@ -62,29 +63,8 @@ def get_tasks_info(cfg):
     return tasks_names
 
 
-def import_model_from_cfg(sess, cfg):
-    """Reads model configuration from config dictionary
-    """
-    model_config = cfg['model']
-    with tf.variable_scope(model_config['definition']):
-        inputs, outputs, update_ops, regulizer = load_model(
-                model_config['definition'],
-                model_config['weights'],
-                model_config['params'])
-
-    with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
-        model_saver = tf.train.Saver(
-                get_variables(model_config['definition']),
-                max_to_keep=None)
-
-    if model_config['weights'] is not None:
-        weights_path = os.path.expanduser(model_config['weights'])
-        if os.path.isdir(weights_path):
-            weights_path = tf.train.latest_checkpoint(weights_path)
-        print('\nRestoring model from {}'.format(weights_path))
-        model_saver.restore(sess, weights_path)
-
-    return inputs, outputs, update_ops, regulizer, model_saver
+def import_model_from_cfg(cfg, sess):
+    return ModelMeta(sess, **cfg['model'])
 
 
 def import_feeders_from_cfg(cfg, batch_size):
@@ -108,84 +88,47 @@ def import_feeders_from_cfg(cfg, batch_size):
     return training_feeders, validating_feeders
 
 
-def import_losses_from_cfg(cfg,
-                           outputs,
-                           ground_truths,
-                           regularizer,
-                           tasks_names):
+def import_losses_from_cfg(cfg, model, ground_truths, task_names):
     """Read loss functions definitions from configuration dictionary
     """
-    loss_defs = []
+    assert len(model.outputs) == len(task_names)
+    assert len(model.outputs) == len(ground_truths)
+    losses = [None] * len(model.outputs)
+
     for loss_config in cfg['losses']:
-        if hasattr(tf.keras.losses, loss_config['definition']):
-            loss = getattr(tf.keras.losses, loss_config['definition'])
-        elif hasattr(custom.losses, loss_config['definition']):
-            loss = getattr(custom.losses, loss_config['definition'])
-        else:
-            raise ValueError
-        loss_def = {'loss': loss,
-                    'attach_to': loss_config['attach_to'],
-                    'coeff': loss_config['coeff']}
-        loss_defs.append(dict2obj(loss_def))
+        task_id = loss_config['attach_to']
+        loss_defname = loss_config['definition']
+        pred_tensor = model.outputs[task_id]
+        true_tensor = ground_truths[task_id]
+        name = 'losses/{}'.format(task_names[task_id])
+        losses[task_id] = LossMeta(
+                loss_defname, pred_tensor, true_tensor, name)
 
-    losses = [None] * len(outputs)
-    accumulators = [None] * len(outputs)
-    averages = [None] * len(outputs)
-    resetters = [None] * len(outputs)
-    for loss_def in loss_defs:
-        with tf.variable_scope(
-                'losses/{}_loss'.format(tasks_names[loss_def.attach_to])):
-            losses[loss_def.attach_to] = tf.reduce_mean(loss_def.loss(
-                ground_truths[loss_def.attach_to],
-                outputs[loss_def.attach_to]))
-            losses[loss_def.attach_to] *= loss_def.coeff
-            if regularizer is not None:
-                losses[loss_def.attach_to] += regularizer
+    if model.regularizer is not None:
+        for idx in range(len(model.outputs)):
+            losses[idx].op += model.regularizer
 
-            accumulator, resetter, average = build_op_accumulator(
-                    losses[loss_def.attach_to])
-            accumulators[loss_def.attach_to] = accumulator
-            resetters[loss_def.attach_to] = resetter
-            averages[loss_def.attach_to] = average
-
-    return losses, accumulators, resetters, averages
+    return losses
 
 
-def import_metrics_from_cfg(cfg, outputs, ground_truths, tasks_names):
+def import_metrics_from_cfg(cfg, model, ground_truths, task_names):
     """Read metrics definitions from configuration dictionary
     """
-    metrics_defs = []
+    assert len(model.outputs) == len(task_names)
+    assert len(model.outputs) == len(ground_truths)
+    metrics = [[] for i in range(len(model.outputs))]
+
     for metrics_config in cfg['metrics']:
-        if hasattr(tf.keras.metrics, metrics_config['definition']):
-            metrics = getattr(tf.keras.metrics, metrics_config['definition'])
-        elif hasattr(custom.metrics, metrics_config['definition']):
-            metrics = getattr(custom.metrics, metrics_config['definition'])
-        else:
-            raise ValueError
-        metrics_def = {'metrics': metrics,
-                       'attach_to': metrics_config['attach_to']}
-        metrics_defs.append(dict2obj(metrics_def))
+        task_id = metrics_config['attach_to']
+        metrics_defname = metrics_config['definition']
+        pred_tensor = model.outputs[task_id]
+        true_tensor = ground_truths[task_id]
+        name = 'metrics/{}_{}'.format(
+                task_names[task_id], len(metrics[task_id]))
+        metrics[task_id].append(MetricsMeta(
+            metrics_defname, pred_tensor, true_tensor, name))
 
-    metrics = [[] for i in range(len(outputs))]
-    accumulators = [[] for i in range(len(outputs))]
-    averages = [[] for i in range(len(outputs))]
-    resetters = [[] for i in range(len(outputs))]
-    for metrics_def in metrics_defs:
-        with tf.variable_scope(
-                'metrics/{}_metrics'.format(
-                    tasks_names[metrics_def.attach_to])):
-
-            m = tf.reduce_mean(metrics_def.metrics(
-                ground_truths[metrics_def.attach_to],
-                outputs[metrics_def.attach_to]))
-            metrics[metrics_def.attach_to].append(m)
-
-            accumulator, resetter, average = build_op_accumulator(m)
-            accumulators[metrics_def.attach_to].append(accumulator)
-            averages[metrics_def.attach_to].append(average)
-            resetters[metrics_def.attach_to].append(resetter)
-
-    return metrics, accumulators, resetters, averages
+    return metrics
 
 
 def import_optimizers_from_cfg(cfg):

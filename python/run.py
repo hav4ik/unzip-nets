@@ -1,0 +1,70 @@
+from argparse import ArgumentParser
+
+import tensorflow as tf
+from tensorflow.keras import backend as K
+
+from utils import config_parser
+from utils.config_parser import import_feeders_from_cfg
+from utils.config_parser import import_losses_from_cfg
+from utils.config_parser import import_metrics_from_cfg
+from utils.config_parser import import_optimizers_from_cfg
+
+from train import train_alternating
+
+
+def _prepare_environment():
+    sess_config = tf.ConfigProto()
+    sess_config.gpu_options.allow_growth = True
+    sess = tf.Session(config=sess_config)
+    K.set_session(sess)
+    return sess
+
+
+def _prepare_feeder_placeholders(outputs, tasks_names):
+    with tf.variable_scope('feeders'):
+        ground_truths = []
+        for idx in range(len(outputs)):
+            y = tf.placeholder(
+                    shape=outputs[idx].get_shape(), dtype=tf.float32,
+                    name='{}_feeder'.format(tasks_names[idx]))
+            ground_truths.append(y)
+    return ground_truths
+
+
+def run_app(app_name, experiment_config, batch_size, app_args):
+    """Run an applications from our unzipping toolbox
+    """
+    sess = _prepare_environment()
+
+    experiment_name, cfg = config_parser.read_config(experiment_config)
+
+    task_names = config_parser.get_tasks_info(cfg)
+    model = config_parser.import_model_from_cfg(cfg, sess)
+
+    ground_truths = _prepare_feeder_placeholders(model.outputs, task_names)
+    train_feeders, val_feeders = import_feeders_from_cfg(cfg, batch_size)
+    optimizer_defs = import_optimizers_from_cfg(cfg)
+
+    losses = import_losses_from_cfg(cfg, model, ground_truths, task_names)
+    metrics = import_metrics_from_cfg(cfg, model, ground_truths, task_names)
+
+    if app_name == 'train':
+        train_alternating(
+                experiment_name, task_names, sess, model, losses, metrics,
+                optimizer_defs, ground_truths, train_feeders, val_feeders,
+                args.out_dir, args.epochs)
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument('app', type=str, help='Unzipping tool to run')
+    parser.add_argument(
+            'config', type=str, help='A JSON file or a string in JSON format')
+    parser.add_argument('-b', '--batch_size', type=int, default=32)
+
+    train_args = parser.add_argument_group('train')
+    train_args.add_argument('-n', '--epochs', type=int, default=10)
+    train_args.add_argument('-o', '--out_dir', type=str, default='out/')
+
+    args = parser.parse_args()
+    run_app(args.app, args.config, args.batch_size, args)

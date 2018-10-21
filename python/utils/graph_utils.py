@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 import custom.models
 
@@ -12,16 +13,6 @@ def load_model(model, weights=None, params={}):
         pass
 
     return loaded_model
-
-
-def get_variables(name_scope):
-    """Gets all variables in the namescope
-    """
-    variables = []
-    for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                 scope=name_scope):
-        variables.append(var)
-    return variables
 
 
 def build_op_accumulator(op):
@@ -52,3 +43,92 @@ def initialize_uninitialized_variables(sess):
                 [v for v in tf.global_variables()
                     if v.name.split(':')[0] in uninitialized_names])
     sess.run(init_op)
+
+
+class ModelMeta:
+    """
+    Holds the model's metadata necessary for performing unzipping movements.
+    Nothing fancy, just a thin layer between our messy code with TF to keep
+    things more or less organized.
+    """
+    def __init__(self,
+                 sess,
+                 definition,
+                 weights=None,
+                 params={}):
+        model_name_scope = definition
+
+        with tf.variable_scope(model_name_scope):
+            inputs, outputs, update_ops, regularizer = \
+                    load_model(definition, weights, params)
+
+        with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
+            model_saver = tf.train.Saver(
+                    tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                      scope=model_name_scope),
+                    max_to_keep=None)
+
+        if weights is not None:
+            weights_path = os.path.expanduser(weights)
+            if os.path.isdir(weights_path):
+                weights_path = tf.train.latest_checkpoint(weights_path)
+            print('\nRestoring model from {}'.format(weights_path))
+            model_saver.restore(sess, weights_path)
+
+        self.inputs = inputs
+        self.outputs = outputs
+        self.update_ops = update_ops
+        self.regularizer = regularizer
+        self.saver = model_saver
+
+
+class LossMeta:
+    """
+    Just holds the loss function's metadata that we might need for
+    unzipping movements.
+    Nothing fancy, just a thin layer between our messy code with TF to keep
+    things more or less organized.
+    """
+    def __init__(self,
+                 loss_defname,
+                 pred_tensor,
+                 true_tensor,
+                 name='losses/'):
+
+        if hasattr(tf.keras.losses, loss_defname):
+            loss_def = getattr(tf.keras.losses, loss_defname)
+        elif hasattr(custom.losses, loss_defname):
+            loss_def = getattr(custom.losses, loss_defname)
+        else:
+            raise ValueError
+
+        with tf.variable_scope(name):
+            self.op = tf.reduce_mean(loss_def(true_tensor, pred_tensor))
+            self.accumulator, self.resetter, self.average = \
+                build_op_accumulator(self.op)
+
+
+class MetricsMeta:
+    """
+    Just holds the loss function's any metadata that we might need for
+    unzipping movements.
+    Nothing fancy, just a thin layer between our messy code with TF to keep
+    things more or less organized.
+    """
+    def __init__(self,
+                 metrics_defname,
+                 pred_tensor,
+                 true_tensor,
+                 name='metrics/'):
+
+        if hasattr(tf.keras.metrics, metrics_defname):
+            metrics_def = getattr(tf.keras.metrics, metrics_defname)
+        elif hasattr(custom.metrics, metrics_defname):
+            metrics_def = getattr(custom.metrics, metrics_defname)
+        else:
+            raise ValueError
+
+        with tf.variable_scope(name):
+            self.op = tf.reduce_mean(metrics_def(true_tensor, pred_tensor))
+            self.accumulator, self.resetter, self.average = \
+                build_op_accumulator(self.op)
