@@ -62,11 +62,11 @@ class ModelMeta:
             inputs, outputs, update_ops, regularizer = \
                     load_model(definition, weights, params)
 
+        self.var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                          scope=model_name_scope)
+
         with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
-            model_saver = tf.train.Saver(
-                    tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                      scope=model_name_scope),
-                    max_to_keep=None)
+            model_saver = tf.train.Saver(self.var_list, max_to_keep=None)
 
         if weights is not None:
             weights_path = os.path.expanduser(weights)

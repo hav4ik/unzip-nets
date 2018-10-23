@@ -9,7 +9,8 @@ from utils.config_parser import import_losses_from_cfg
 from utils.config_parser import import_metrics_from_cfg
 from utils.config_parser import import_optimizers_from_cfg
 
-from train import train_alternating
+from unzipping.train import train_alternating
+from unzipping.stats import grad_stats, integral_stats
 
 
 def _prepare_environment():
@@ -31,7 +32,7 @@ def _prepare_feeder_placeholders(outputs, tasks_names):
     return ground_truths
 
 
-def run_app(app_name, experiment_config, batch_size, app_args):
+def run_app(app_name, experiment_config, batch_size, out_dir, app_args):
     """Run an applications from our unzipping toolbox
     """
     sess = _prepare_environment()
@@ -52,7 +53,17 @@ def run_app(app_name, experiment_config, batch_size, app_args):
         train_alternating(
                 experiment_name, task_names, sess, model, losses, metrics,
                 optimizer_defs, ground_truths, train_feeders, val_feeders,
-                args.out_dir, args.epochs)
+                out_dir, args.epochs)
+
+    elif app_name == 'ipaths':
+        integral_stats(
+                sess, model, args.var_name, task_names, losses, ground_truths,
+                train_feeders, val_feeders, out_dir)
+
+    elif app_name == 'gradstat':
+        grad_stats(
+                sess, model, args.var_name, task_names, losses, ground_truths,
+                train_feeders, val_feeders, out_dir)
 
 
 if __name__ == '__main__':
@@ -61,10 +72,13 @@ if __name__ == '__main__':
     parser.add_argument(
             'config', type=str, help='A JSON file or a string in JSON format')
     parser.add_argument('-b', '--batch_size', type=int, default=32)
+    parser.add_argument('-o', '--out_dir', type=str, default='out/')
 
     train_args = parser.add_argument_group('train')
     train_args.add_argument('-n', '--epochs', type=int, default=10)
-    train_args.add_argument('-o', '--out_dir', type=str, default='out/')
+
+    gradstat_args = parser.add_argument_group('grad stat')
+    gradstat_args.add_argument('-v', '--var_name', type=str)
 
     args = parser.parse_args()
-    run_app(args.app, args.config, args.batch_size, args)
+    run_app(args.app, args.config, args.batch_size, args.out_dir, args)

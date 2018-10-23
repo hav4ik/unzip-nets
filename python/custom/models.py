@@ -32,12 +32,13 @@ def lenet(outputs):
     x = layers.Activation('relu')(x)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)
     x = layers.Flatten()(x)
-    x = layers.Dense(128, activation='relu')(x)
+    x = layers.Dense(128, activation='relu', kernel_initializer='glorot_uniform')(x)
     x = layers.Dropout(0.5)(x)
 
     ys = []
     for output in outputs:
-        ys.append(layers.Dense(output['num'], activation='softmax')(x))
+        ys.append(layers.Dense(output['num'], activation='softmax',
+            kernel_initializer='glorot_uniform')(x))
     model = tf.keras.models.Model(inputs=[inputs], outputs=ys)
 
     return (model.inputs, model.outputs,
