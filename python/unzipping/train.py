@@ -175,7 +175,7 @@ def train_alternating(exp_name,
         summary_writer.add_summary(out['hist_summary'], epoch)
 
         for i in range(len(model.outputs)):
-            print('task #{}:'.format(i))
+            print('task "{}":'.format(task_names[i]))
             print('  -(train): loss={:3.6f}, metrics=[{}]'.format(
                 trn_losses[i],
                 ', '.join(['{:.6f}'.format(x) for x in trn_metrics[i]])))

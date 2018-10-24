@@ -10,7 +10,7 @@ from utils.config_parser import import_metrics_from_cfg
 from utils.config_parser import import_optimizers_from_cfg
 
 from unzipping.train import train_alternating
-from unzipping.stats import grad_stats, integral_stats
+from unzipping.stats import integral_stats
 
 
 def _prepare_environment():
@@ -32,7 +32,12 @@ def _prepare_feeder_placeholders(outputs, tasks_names):
     return ground_truths
 
 
-def run_app(app_name, experiment_config, batch_size, out_dir, app_args):
+def run_app(app_name,
+            experiment_config,
+            batch_size,
+            weights,
+            out_dir,
+            app_args):
     """Run an applications from our unzipping toolbox
     """
     sess = _prepare_environment()
@@ -41,6 +46,8 @@ def run_app(app_name, experiment_config, batch_size, out_dir, app_args):
 
     task_names = config_parser.get_tasks_info(cfg)
     model = config_parser.import_model_from_cfg(cfg, sess)
+    if weights is not None:
+        model.saver.restore(sess, weights)
 
     ground_truths = _prepare_feeder_placeholders(model.outputs, task_names)
     train_feeders, val_feeders = import_feeders_from_cfg(cfg, batch_size)
@@ -60,11 +67,6 @@ def run_app(app_name, experiment_config, batch_size, out_dir, app_args):
                 sess, model, args.var_name, task_names, losses, ground_truths,
                 train_feeders, val_feeders, out_dir)
 
-    elif app_name == 'gradstat':
-        grad_stats(
-                sess, model, args.var_name, task_names, losses, ground_truths,
-                train_feeders, val_feeders, out_dir)
-
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -73,6 +75,7 @@ if __name__ == '__main__':
             'config', type=str, help='A JSON file or a string in JSON format')
     parser.add_argument('-b', '--batch_size', type=int, default=32)
     parser.add_argument('-o', '--out_dir', type=str, default='out/')
+    parser.add_argument('-w', '--weights', type=str)
 
     train_args = parser.add_argument_group('train')
     train_args.add_argument('-n', '--epochs', type=int, default=10)
@@ -81,4 +84,9 @@ if __name__ == '__main__':
     gradstat_args.add_argument('-v', '--var_name', type=str)
 
     args = parser.parse_args()
-    run_app(args.app, args.config, args.batch_size, args.out_dir, args)
+    run_app(args.app,
+            args.config,
+            args.batch_size,
+            args.weights,
+            args.out_dir,
+            args)
