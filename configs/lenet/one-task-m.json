@@ -4,7 +4,7 @@
         {"name": "mnist"}
     ],
     "model": {
-        "definition": "alexnet",
+        "definition": "lenet",
         "params": {
             "outputs": [
                 {"name": "mnist_head", "num": 10}

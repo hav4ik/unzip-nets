@@ -1,15 +1,17 @@
 {
-    "experiment_name": "two-tasks-fc",
+    "experiment_name": "three-tasks",
     "tasks": [
         {"name": "cifar"},
+        {"name": "mnist"},
         {"name": "fashion"}
     ],
     "model": {
-        "definition": "alexnet",
+        "definition": "lenet",
         "params": {
             "outputs": [
                 {"name": "cifar_head", "num": 10},
-                {"name": "fashion_head", "num": 10}
+                {"name": "mnist_head", "num": 10},
+                {"name": "fashion_hean", "num": 10}
             ]
         },
         "weights": null
@@ -22,15 +24,31 @@
                     "dataset": "cifar10",
                     "mode": "rgb",
                     "size": 32,
-                    "normalization": true,
-                    "augmentation": true
+                    "normalization": true
+                },
+                "training": {
+                    "augmentation": true,
+                    "shuffle": true
+                },
+                "validating": {}
+            },
+            "attach_to": 0
+        },
+        {
+            "definition": "toy",
+            "params": {
+                "common": {
+                    "dataset": "mnist",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
                 },
                 "training": {
                     "shuffle": true
                 },
                 "validating": {}
             },
-            "attach_to": 0
+            "attach_to": 1
         },
         {
             "definition": "toy",
@@ -42,11 +60,12 @@
                     "normalization": true
                 },
                 "training": {
+                    "augmentation": true,
                     "shuffle": true
                 },
                 "validating": {}
             },
-            "attach_to": 1
+            "attach_to": 2
         }
     ],
     "losses": [
@@ -59,11 +78,17 @@
             "definition": "categorical_crossentropy",
             "coeff": 1.0,
             "attach_to": 1
+        },
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 2
         }
     ],
     "metrics": [
         {"definition": "categorical_accuracy", "attach_to": 0},
-        {"definition": "categorical_accuracy", "attach_to": 1}
+        {"definition": "categorical_accuracy", "attach_to": 1},
+        {"definition": "categorical_accuracy", "attach_to": 2}
     ],
     "optimizer": {
         "definition": "MomentumOptimizer",

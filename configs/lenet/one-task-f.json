@@ -4,7 +4,7 @@
         {"name": "fashion"}
     ],
     "model": {
-        "definition": "alexnet",
+        "definition": "lenet",
         "params": {
             "outputs": [
                 {"name": "fashion_head", "num": 10}

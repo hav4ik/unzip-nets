@@ -4,7 +4,7 @@
         {"name": "cifar"}
     ],
     "model": {
-        "definition": "alexnet",
+        "definition": "lenet",
         "params": {
             "outputs": [
                 {"name": "cifar_head", "num": 10}
