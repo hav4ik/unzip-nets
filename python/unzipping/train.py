@@ -75,30 +75,25 @@ def _prepare_dirs(experiment_name, out_dir):
     return num_tbrd_dir, num_ckpt_dir
 
 
-def train_alternating(exp_name,
-                      task_names,
-                      sess,
+def train_alternating(sess,
+                      exp_name,
                       model,
-                      losses,
-                      metrics,
+                      tasks,
                       optimizer_defs,
-                      true_tensors,
-                      train_feeders,
-                      val_feeders,
                       out_dir,
                       n_epochs):
 
-    train_feeder_idx, train_samples = _concatenate_feeders(train_feeders)
-    val_feeder_idx, val_samples = _concatenate_feeders(val_feeders)
+    train_feeder_idx, train_samples = _concatenate_feeders(tasks.train_feeders)
+    val_feeder_idx, val_samples = _concatenate_feeders(tasks.val_feeders)
 
     tensorboard_dir, checkpoints_dir = _prepare_dirs(exp_name, out_dir)
     optimizer_op, optimizer_params, lr_p, lr_s = optimizer_defs
 
-    loss_reset_ops = [l.resetter for l in losses]
-    loss_avg_ops = [l.average for l in losses]
-    metric_reset_ops = [[m.resetter for m in t] for t in metrics]
-    metric_avg_ops = [[m.average for m in t] for t in metrics]
-    metric_accumulators = [[m.accumulator for m in t] for t in metrics]
+    loss_reset_ops = [l.resetter for l in tasks.losses]
+    loss_avg_ops = [l.average for l in tasks.losses]
+    metric_reset_ops = [[m.resetter for m in t] for t in tasks.metrics]
+    metric_avg_ops = [[m.average for m in t] for t in tasks.metrics]
+    metric_accumulators = [[m.accumulator for m in t] for t in tasks.metrics]
 
     print('\nStarted training')
     print('checkpoints: {}'.format(checkpoints_dir))
@@ -106,12 +101,12 @@ def train_alternating(exp_name,
 
     gradients = []
     targets = []
-    for idx in range(len(model.outputs)):
+    for idx in range(tasks.n):
         with tf.variable_scope(
-                'optimizers/{}_optimizer'.format(task_names[idx])), \
+                'optimizers/{}_optimizer'.format(tasks.names[idx])), \
                 tf.control_dependencies(model.update_ops):
             optimizer = optimizer_op(**optimizer_params)
-            loss = losses[idx].op
+            loss = tasks.losses[idx].op
             grads_and_vars = optimizer.compute_gradients(loss=loss)
             gradients.append(grads_and_vars)
             targets.append(optimizer.apply_gradients(grads_and_vars))
@@ -119,7 +114,7 @@ def train_alternating(exp_name,
 
     with tf.variable_scope('summaries'):
         train_epoch_summary, val_epoch_summary = \
-                _make_summaries(metrics, losses, task_names)
+                _make_summaries(tasks.metrics, tasks.losses, tasks.names)
         histogram_summary_list = []
         for g, v in gradients[0]:
             if g is None:
@@ -140,12 +135,12 @@ def train_alternating(exp_name,
         train_idxs = tqdm(train_feeder_idx[:], desc='trn')
         sess.run([loss_reset_ops, metric_reset_ops])
         for idx in train_idxs:
-            x, y = next(train_feeders[idx])
-            ops_to_run = {'loss_accumulate': losses[idx].accumulator,
+            x, y = next(tasks.train_feeders[idx])
+            ops_to_run = {'loss_accumulate': tasks.losses[idx].accumulator,
                           'metrics_accumulate': metric_accumulators[idx],
                           'optimizer': targets[idx]}
             feed_dict = {model.inputs[0]: x,
-                         true_tensors[idx]: y,
+                         tasks.gt[idx]: y,
                          K.learning_phase(): 1}
             if lr_p is not None and lr_s is not None:
                 feed_dict.update({lr_p: current_lr})
@@ -159,11 +154,11 @@ def train_alternating(exp_name,
         val_idxs = tqdm(val_feeder_idx[:], desc='val')
         sess.run(metric_reset_ops)
         for idx in val_idxs:
-            x, y = next(val_feeders[idx])
-            ops_to_run = {'loss_accumulate': losses[idx].accumulator,
+            x, y = next(tasks.val_feeders[idx])
+            ops_to_run = {'loss_accumulate': tasks.losses[idx].accumulator,
                           'metrics_accumulate': metric_accumulators[idx]}
             feed_dict = {model.inputs[0]: x,
-                         true_tensors[idx]: y,
+                         tasks.gt[idx]: y,
                          K.learning_phase(): 0}
             sess.run(ops_to_run, feed_dict=feed_dict)
         out = sess.run({
@@ -174,8 +169,8 @@ def train_alternating(exp_name,
         summary_writer.add_summary(out['val_summary'], epoch)
         summary_writer.add_summary(out['hist_summary'], epoch)
 
-        for i in range(len(model.outputs)):
-            print('task "{}":'.format(task_names[i]))
+        for i in range(tasks.n):
+            print('task "{}":'.format(tasks.names[i]))
             print('  -(train): loss={:3.6f}, metrics=[{}]'.format(
                 trn_losses[i],
                 ', '.join(['{:.6f}'.format(x) for x in trn_metrics[i]])))

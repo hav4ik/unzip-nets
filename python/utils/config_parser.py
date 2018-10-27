@@ -152,3 +152,40 @@ def import_optimizers_from_cfg(cfg):
     else:
         raise ValueError
     return optimizer_op, optimizer_params, lr_placeholder, lr_scheduler
+
+
+def prepare_feeder_placeholders(outputs, tasks_names):
+    with tf.variable_scope('feeders'):
+        ground_truths = []
+        for idx in range(len(outputs)):
+            y = tf.placeholder(
+                    shape=outputs[idx].get_shape(), dtype=tf.float32,
+                    name='{}_feeder'.format(tasks_names[idx]))
+            ground_truths.append(y)
+    return ground_truths
+
+
+class Tasks:
+    """
+    Just a convenient structure to hold all the necessary details about
+    the tasks (names, placeholders, data feeders, losses, metrics, etc.
+    in given experiment configuration.
+    """
+    def __init__(self, cfg, model, batch_size):
+        self.names = get_tasks_info(cfg)
+        self.gt = prepare_feeder_placeholders(
+                model.outputs, self.names)
+        self.train_feeders, self.val_feeders = \
+            import_feeders_from_cfg(cfg, batch_size)
+        self.losses = import_losses_from_cfg(
+                cfg, model, self.gt, self.names)
+        self.metrics = import_metrics_from_cfg(
+                cfg, model, self.gt, self.names)
+
+        assert len(model.outputs) == len(self.names)
+        assert len(model.outputs) == len(self.losses)
+        assert len(model.outputs) == len(self.metrics)
+        assert len(model.outputs) == len(self.train_feeders)
+        assert len(model.outputs) == len(self.val_feeders)
+
+        self.n = len(model.outputs)

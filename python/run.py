@@ -21,17 +21,6 @@ def _prepare_environment():
     return sess
 
 
-def _prepare_feeder_placeholders(outputs, tasks_names):
-    with tf.variable_scope('feeders'):
-        ground_truths = []
-        for idx in range(len(outputs)):
-            y = tf.placeholder(
-                    shape=outputs[idx].get_shape(), dtype=tf.float32,
-                    name='{}_feeder'.format(tasks_names[idx]))
-            ground_truths.append(y)
-    return ground_truths
-
-
 def run_app(app_name,
             experiment_config,
             batch_size,
@@ -43,29 +32,28 @@ def run_app(app_name,
     sess = _prepare_environment()
 
     experiment_name, cfg = config_parser.read_config(experiment_config)
-
-    task_names = config_parser.get_tasks_info(cfg)
     model = config_parser.import_model_from_cfg(cfg, sess)
     if weights is not None:
         model.saver.restore(sess, weights)
 
-    ground_truths = _prepare_feeder_placeholders(model.outputs, task_names)
-    train_feeders, val_feeders = import_feeders_from_cfg(cfg, batch_size)
+    tasks = config_parser.Tasks(cfg, model, batch_size)
     optimizer_defs = import_optimizers_from_cfg(cfg)
 
-    losses = import_losses_from_cfg(cfg, model, ground_truths, task_names)
-    metrics = import_metrics_from_cfg(cfg, model, ground_truths, task_names)
-
     if app_name == 'train':
-        train_alternating(
-                experiment_name, task_names, sess, model, losses, metrics,
-                optimizer_defs, ground_truths, train_feeders, val_feeders,
-                out_dir, args.epochs)
+        train_alternating(sess,
+                          experiment_name,
+                          model,
+                          tasks,
+                          optimizer_defs,
+                          out_dir,
+                          args.epochs)
 
     elif app_name == 'ipaths':
-        integral_stats(
-                sess, model, args.var_name, task_names, losses, ground_truths,
-                train_feeders, val_feeders, out_dir)
+        integral_stats(sess,
+                       model,
+                       args.var_name,
+                       tasks,
+                       out_dir)
 
 
 if __name__ == '__main__':

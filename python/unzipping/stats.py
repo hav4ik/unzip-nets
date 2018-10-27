@@ -30,11 +30,7 @@ def _prepare_dirs(experiment_name, out_dir):
 def integral_stats(sess,
                    model,
                    layer_name,
-                   task_names,
-                   losses,
-                   true_tensors,
-                   train_feeders,
-                   val_feeders,
+                   tasks,
                    out_dir):
 
     initial_point_path = '/tmp/initial_point'
@@ -59,52 +55,52 @@ def integral_stats(sess,
 
     gradients = []
     targets = []
-    for idx in range(len(model.outputs)):
+    for idx in range(tasks.n):
         with tf.variable_scope(
-                'optimizers/{}_optimizer'.format(task_names[idx])), \
+                'optimizers/{}_optimizer'.format(tasks.names[idx])), \
                 tf.control_dependencies(model.update_ops):
             optimizer = tf.train.MomentumOptimizer(
                     learning_rate=0.01, momentum=0.9, use_nesterov=True)
-            loss = losses[idx].op
+            loss = tasks.losses[idx].op
             grads_and_vars = optimizer.compute_gradients(
                     loss=loss, var_list=trainable_vars)
             gradients.append(grads_and_vars)
             targets.append(optimizer.apply_gradients(grads_and_vars))
     graph_utils.initialize_uninitialized_variables(sess)
 
-    n_samples = np.array([f.n // f.batch_size for f in train_feeders])
+    n_samples = np.array([f.n // f.batch_size for f in tasks.train_feeders])
     initial_vals = sess.run(vars_to_monitor)
-    after_vals = [None] * len(model.outputs)
-    for task_id in range(len(model.outputs)):
+    after_vals = [None] * tasks.n
+    for task_id in range(tasks.n):
         model.saver.restore(sess, initial_point_path)
         batches = tqdm(range(n_samples[task_id]),
-                       desc='task %s' % task_names[task_id])
+                       desc='task %s' % tasks.names[task_id])
         for batch in batches:
-            x, y = next(train_feeders[task_id])
+            x, y = next(tasks.train_feeders[task_id])
             ops_to_run = {'optimizer': targets[task_id]}
             feed_dict = {model.inputs[0]: x,
-                         true_tensors[task_id]: y,
+                         tasks.gt[task_id]: y,
                          K.learning_phase(): 1}
             sess.run(ops_to_run, feed_dict=feed_dict)
         after_vals[task_id] = sess.run(vars_to_monitor)
 
-    for task_id in range(len(model.outputs)):
-        print('||{} - init|| = '.format(task_names[task_id]), end=' ')
+    for task_id in range(tasks.n):
+        print('||{} - init|| = '.format(tasks.names[task_id]), end=' ')
         for k in range(len(initial_vals)):
             after_vals[task_id][k] -= initial_vals[k]
         print([np.linalg.norm(after_vals[task_id][k])
                for k in range(len(initial_vals))])
-    for i in range(len(model.outputs)):
-        for j in range(i + 1, len(model.outputs)):
+    for i in range(tasks.n):
+        for j in range(i + 1, tasks.n):
             print('||{} - {}|| ='.format(
-                task_names[i], task_names[j]), end=' ')
+                tasks.names[i], tasks.names[j]), end=' ')
             print([np.linalg.norm(after_vals[j][k] - after_vals[i][k])
                    for k in range(len(initial_vals))])
 
-    for i in range(len(model.outputs)):
-        for j in range(i + 1, len(model.outputs)):
+    for i in range(tasks.n):
+        for j in range(i + 1, tasks.n):
             print('cos({}, {}) ='.format(
-                task_names[i], task_names[j]), end=' ')
+                tasks.names[i], tasks.names[j]), end=' ')
 
             print([np.divide((after_vals[j][k] * after_vals[i][k]).sum(),
                    (lg.norm(after_vals[j][k]) * lg.norm(after_vals[i][k])))
