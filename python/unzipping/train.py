@@ -82,7 +82,8 @@ def train_alternating(sess,
                       optimizer_defs,
                       out_dir,
                       n_epochs):
-
+    """Trains a Multi-Tasking network with separated optimizer for each branch.
+    """
     train_feeder_idx, train_samples = _concatenate_feeders(tasks.train_feeders)
     val_feeder_idx, val_samples = _concatenate_feeders(tasks.val_feeders)
 
