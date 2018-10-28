@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
 from tensorflow.core.framework import variable_pb2
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 def _get_tentacles(scope_name, within_ops=None):
