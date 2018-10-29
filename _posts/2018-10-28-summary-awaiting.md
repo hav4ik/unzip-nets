@@ -1,6 +1,7 @@
 ---
 section: literature
 title: "Awaiting for summary..."
+type: "SUMMARY"
 layout: nil
 ---
 
