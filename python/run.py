@@ -4,9 +4,6 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 
 from utils import config_parser
-from utils.config_parser import import_feeders_from_cfg
-from utils.config_parser import import_losses_from_cfg
-from utils.config_parser import import_metrics_from_cfg
 from utils.config_parser import import_optimizers_from_cfg
 
 from unzipping.train import train_alternating
@@ -32,11 +29,14 @@ def run_app(app_name,
     sess = _prepare_environment()
 
     experiment_name, cfg = config_parser.read_config(experiment_config)
-    model = config_parser.import_model_from_cfg(cfg, sess)
+    tasks = config_parser.Tasks(cfg)
+
+    model = config_parser.import_model_from_cfg(sess, tasks.names, cfg)
     if weights is not None:
         model.saver.restore(sess, weights)
 
-    tasks = config_parser.Tasks(cfg, model, batch_size)
+    tasks.wrap_on_model(model)
+    tasks.load_feeders(batch_size)
     optimizer_defs = import_optimizers_from_cfg(cfg)
 
     if app_name == 'train':
