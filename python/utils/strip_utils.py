@@ -1,3 +1,4 @@
+import uuid
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
 from tensorflow.core.framework import variable_pb2
@@ -176,6 +177,63 @@ def do_branching(layer_name, branching_scheme, network_ops=None):
     return duplicates
 
 
+def strip(sess,
+          name_scopes,
+          excluding=False,
+          session_prep=None,
+          saver=None):
+    """Strips the graph from unnecessary clothing, leaving only a naked body
+
+    Args:
+      sess:         current session; this is going to be closed and f*cked.
+      name_scopes:  name scopes to keep (or throw away if excluding is True)
+      excluding:    if True, excludes ops in name_scopes instead
+      session_prep: function that makes a new session (for customized sess)
+      saver:        model's saver; if None, tf.train.Saver() is used.
+
+    Returns:
+      sess:         a current session that holds the new graph and weights.
+      saver:        a saver for the naked model after stripping.
+    """
+    if saver is None:
+        saver = tf.train.Saver(name=uuid.uuid4().hex[:6].upper())
+    saver.save(sess, '/tmp/with_clothes', write_meta_graph=False)
+
+    naked_body_ops = []
+    if isinstance(name_scopes, list):
+        for name_scope in name_scopes:
+            for node in tf.get_default_graph().as_graph_def().node:
+                if node.name.startswith(name_scope) and not excluding:
+                    naked_body_ops.append(node.name)
+                elif not node.name.startswith(name_scope) and excluding:
+                    naked_body_ops.append(node.name)
+    else:
+        for node in tf.get_default_graph().as_graph_def().node:
+            if node.name.startswith(name_scopes) and not excluding:
+                naked_body_ops.append(node.name)
+            elif not node.name.startswith(name_scopes) and excluding:
+                naked_body_ops.append(node.name)
+
+    naked_body_def = tf.graph_util.extract_sub_graph(
+        tf.get_default_graph().as_graph_def(), naked_body_ops)
+    tf.train.export_meta_graph(
+            '/tmp/naked_body.meta', graph_def=naked_body_def)
+
+    sess.close()
+    K.clear_session()
+    tf.reset_default_graph()
+
+    if session_prep is None:
+        sess = tf.Session()
+    else:
+        sess = session_prep()
+    K.set_session(sess)
+
+    naked_saver = tf.train.import_meta_graph('/tmp/naked_body.meta')
+    naked_saver.restore(sess, '/tmp/with_clothes')
+    return sess, naked_saver
+
+
 def unzip(sess,
           network_ops,
           layer_name,
@@ -198,7 +256,6 @@ def unzip(sess,
       sess:             a current session that holds the new graph and weights.
       saver:            a saver for the model after surgery.
     """
-
     if saver is None:
         pre_surgery_saver = tf.train.Saver(name=saver_scope)
     else:
@@ -220,28 +277,10 @@ def unzip(sess,
     for var, new_var in duplicate_var_pairs:
         new_var.load(var.eval(sess), sess)
     post_surgery_saver = tf.train.Saver()
-    post_surgery_saver.save(sess, '/tmp/post_surgery', write_meta_graph=False)
 
-    non_saver_nodes = []
-    for node in tf.get_default_graph().as_graph_def().node:
-        if not node.name.startswith(saver_scope):
-            non_saver_nodes.append(node.name)
-    no_saver_graphdef = tf.graph_util.extract_sub_graph(
-        tf.get_default_graph().as_graph_def(), non_saver_nodes)
-    tf.train.export_meta_graph(
-            '/tmp/full_saver.meta', graph_def=no_saver_graphdef)
-
-    sess.close()
-    K.clear_session()
-    tf.reset_default_graph()
-
-    if session_prep is None:
-        sess = tf.Session()
-    else:
-        sess = session_prep()
-    K.set_session(sess)
-
-    full_saver = tf.train.import_meta_graph('/tmp/full_saver.meta')
-    full_saver.restore(sess, '/tmp/post_surgery')
-
+    sess, full_saver = strip(sess,
+                             saver_scope,
+                             excluding=True,
+                             session_prep=session_prep,
+                             saver=post_surgery_saver)
     return sess, full_saver
