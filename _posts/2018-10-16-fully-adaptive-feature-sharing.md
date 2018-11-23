@@ -39,7 +39,7 @@ So, the *affinity* between task $$i$$ and $$j$$ can the thought of some measure 
 
 ## Branch Affinity Score
 
-For network branches $$k$$ and $$l$$, with outputs to the tasks $$\{ T_k^0, T_k^1, \dots T_k^n \}$$ and $$\{ T_l^0, T_l^1, \dots T_k^m \}$$ respectively, the ***directed branch affinity*** from branch $$k$$ to branch $$l$$ and vice-versa are defined as following:
+For network branches $$k$$ and $$l$$, with outputs to the tasks $$\{ T_k^0, T_k^1, \dots T_k^n \}$$ and $$\{ T_l^0, T_l^1, \dots T_l^m \}$$ respectively, the ***directed branch affinity*** from branch $$k$$ to branch $$l$$ and vice-versa are defined as following:
 
 $$
 \begin{equation} \label{dbaffinity}

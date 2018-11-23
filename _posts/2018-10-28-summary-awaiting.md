@@ -19,4 +19,9 @@ The following papers are awesome and can inspire and shed new lights to new appr
 *  An Information-Theoretic Metric of Transferability for Task Transfer Learning *(Awaiting review on ICLR'19)*  
    [OpenReview](#) \| [PDF link](https://openreview.net/pdf?id=BkxAUjRqY7)
 
+### Neuron Inspection and Pruning
 
+*  NISP: Pruning Networks using Neural Importance Score Propagation *(CVPR'18)*  
+   [arxiv:1711.05908](https://arxiv.org/abs/1711.05908) \| [PDF link](https://arxiv.org/pdf/1711.05908.pdf)
+*  How important is a Neuron? *(NIPS'18)*  
+   [Review](https://towardsdatascience.com/nips2018-google-paper-summary-how-important-is-a-neuron-3de4b085eb03) \| [arxiv:1805.12233](https://arxiv.org/abs/1805.12233) \| [PDF link](https://arxiv.org/pdf/1805.12233.pdf)
