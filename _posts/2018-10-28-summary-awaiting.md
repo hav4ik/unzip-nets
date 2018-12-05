@@ -14,10 +14,14 @@ The following papers are awesome and can inspire and shed new lights to new appr
 *  GradNorm: Gradient Normalization for Adaptive Loss Balancing in Deep Multitask Networks *(ICML'18)*  
    [arxiv:1711.02257](https://arxiv.org/abs/1711.02257) \| [PDF link](https://arxiv.org/pdf/1711.02257.pdf)
 
+
 ### Representation Transfer:
 
 *  An Information-Theoretic Metric of Transferability for Task Transfer Learning *(Awaiting review on ICLR'19)*  
    [OpenReview](#) \| [PDF link](https://openreview.net/pdf?id=BkxAUjRqY7)
+*  Transfer Learning with Neural AutoML *NIPS 2018*  
+   [PDF Link](http://papers.nips.cc/paper/8056-transfer-learning-with-neural-automl.pdf)
+
 
 ### Neuron Inspection and Pruning
 
