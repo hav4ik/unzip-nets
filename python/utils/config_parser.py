@@ -63,8 +63,8 @@ def get_tasks_info(cfg):
     return tasks_names
 
 
-def import_model_from_cfg(cfg, sess):
-    return ModelMeta(sess, **cfg['model'])
+def import_model_from_cfg(sess, task_names, cfg):
+    return ModelMeta(sess, task_names=task_names, **cfg['model'])
 
 
 def import_feeders_from_cfg(cfg, batch_size):
@@ -171,21 +171,43 @@ class Tasks:
     the tasks (names, placeholders, data feeders, losses, metrics, etc.
     in given experiment configuration.
     """
-    def __init__(self, cfg, model, batch_size):
+    def __init__(self,
+                 cfg,
+                 model=None,
+                 batch_size=None):
+
         self.names = get_tasks_info(cfg)
+        self.n = len(self.names)
+        self._cfg = cfg
+
+        self.losses = None
+        self.gt = None
+        self.metrics = None
+        self.train_feeders = None
+        self.val_feeders = None
+
+        if model is not None:
+            self.wrap_on_model(model)
+
+        if batch_size is not None:
+            self.load_feeders(batch_size)
+
+    def wrap_on_model(self, model):
+        # TODO: get rid of model.outputs here and only work with feeders
         self.gt = prepare_feeder_placeholders(
                 model.outputs, self.names)
-        self.train_feeders, self.val_feeders = \
-            import_feeders_from_cfg(cfg, batch_size)
         self.losses = import_losses_from_cfg(
-                cfg, model, self.gt, self.names)
+                self._cfg, model, self.gt, self.names)
         self.metrics = import_metrics_from_cfg(
-                cfg, model, self.gt, self.names)
+                self._cfg, model, self.gt, self.names)
 
-        assert len(model.outputs) == len(self.names)
-        assert len(model.outputs) == len(self.losses)
-        assert len(model.outputs) == len(self.metrics)
-        assert len(model.outputs) == len(self.train_feeders)
-        assert len(model.outputs) == len(self.val_feeders)
+        assert self.n == len(model.outputs)
+        assert self.n == len(self.losses)
+        assert self.n == len(self.metrics)
 
-        self.n = len(model.outputs)
+    def load_feeders(self, batch_size):
+        self.train_feeders, self.val_feeders = \
+            import_feeders_from_cfg(self._cfg, batch_size)
+
+        assert self.n == len(self.train_feeders)
+        assert self.n == len(self.val_feeders)

@@ -3,15 +3,14 @@ import tensorflow as tf
 import custom.models
 
 
-def load_model(model, weights=None, params={}):
-    """loads a model either from module or from a checkpoint
+def load_model_by_constructor(model_constructor, weights=None, params={}):
+    """loads a model from a constructort def
     """
-    if hasattr(custom.models, model):
-        model_definition = getattr(custom.models, model)
+    if hasattr(custom.models, model_constructor):
+        model_definition = getattr(custom.models, model_constructor)
         loaded_model = model_definition(**params)
     else:
         pass
-
     return loaded_model
 
 
@@ -53,27 +52,62 @@ class ModelMeta:
     """
     def __init__(self,
                  sess,
-                 definition,
+                 task_names=None,
+                 model_def=None,
+                 definition=None,
                  weights=None,
                  params={}):
-        model_name_scope = definition
 
-        with tf.variable_scope(model_name_scope):
-            inputs, outputs, update_ops, regularizer = \
-                    load_model(definition, weights, params)
+        if definition is not None:
+            with tf.variable_scope('model'):
+                inputs, model_outputs, update_ops, regularizer = \
+                        load_model_by_constructor(definition, weights, params)
 
-        self.var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope=model_name_scope)
+            self.var_list = tf.get_collection(
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope='model')
 
-        with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
-            model_saver = tf.train.Saver(self.var_list, max_to_keep=None)
+            with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
+                model_saver = tf.train.Saver(self.var_list, max_to_keep=None)
 
-        if weights is not None:
-            weights_path = os.path.expanduser(weights)
-            if os.path.isdir(weights_path):
-                weights_path = tf.train.latest_checkpoint(weights_path)
-            print('\nRestoring model from {}'.format(weights_path))
-            model_saver.restore(sess, weights_path)
+            if weights is not None:
+                weights_path = os.path.expanduser(weights)
+                if os.path.isdir(weights_path):
+                    weights_path = tf.train.latest_checkpoint(weights_path)
+                print('\nRestoring model from {}'.format(weights_path))
+                model_saver.restore(sess, weights_path)
+
+            outputs = []
+            if task_names is None:
+                task_names = ['task_%d' % i for i in range(len(model_outputs))]
+            with tf.variable_scope('outputs'):
+                for output, name in zip(model_outputs, task_names):
+                    outputs.append(tf.identity(output, name=name))
+
+        elif model_def is not None:
+            model_def = os.path.expanduser(model_def)
+            print('\nRestoring model from {}'.format(model_def))
+            model_saver = tf.train.import_meta_graph(model_def)
+
+            self.var_list = tf.get_collection(
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope='model')
+
+            if weights is not None:
+                weights_path = os.path.expanduser(weights)
+                if os.path.isdir(weights_path):
+                    weights_path = tf.train.latest_checkpoint(weights_path)
+                print('Restoring weights from {}'.format(weights_path))
+                model_saver.restore(sess, weights_path)
+
+            outputs = []
+            if task_names is None:
+                task_names = ['task_%d' % i for i in range(len(model_outputs))]
+            for task_name in task_names:
+                outputs.append(tf.get_default_graph().get_tensor_by_name(
+                    'outputs/{}'.format(task_name)))
+
+        else:
+            raise NameError('Either `definition` or `task_names` should be'
+                            'provided.')
 
         self.inputs = inputs
         self.outputs = outputs
