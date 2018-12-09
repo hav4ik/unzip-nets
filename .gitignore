@@ -7,6 +7,6 @@ __pycache__/
 *.swp
 *.swo
 
-# prototyping folder
-prototyping/
+# outputs
+*/.ipynb_checkpoints
 *out/
