@@ -1,0 +1,83 @@
+{
+    "experiment_name": "two-tasks-de",
+    "tasks": [
+        {"name": "dogs_cats"},
+        {"name": "emotions"}
+    ],
+    "model": {
+        "definition": "lenet",
+        "params": {
+            "outputs": [
+                {"name": "dogs_cats_head", "num": 2},
+                {"name": "emotion_head", "num": 5}
+            ]
+        },
+        "weights": null
+    },
+    "feeders": [
+        {
+            "definition": "xy_hdf5",
+            "params": {
+                "common": {
+                    "dataset": "dogs_vs_cats",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
+                "training": {
+                    "h5file": "~/data/datasets/dogs-vs-cats/train.h5",
+                    "shuffle": true,
+                    "augmentation": true
+                },
+                "validating": {
+                    "h5file": "~/data/datasets/dogs-vs-cats/val.h5"
+                }
+            },
+            "attach_to": 0
+        },
+        {
+            "definition": "xy_hdf5",
+            "params": {
+                "common": {
+                    "dataset": "ferplus",
+                    "mode": "rgb",
+                    "size": 32,
+                    "normalization": true
+                },
+                "training": {
+                    "h5file": "~/data/datasets/fer-plus/train.h5",
+                    "shuffle": true,
+                    "augmentation": true
+                },
+                "validating": {
+                    "h5file": "~/data/datasets/fer-plus/test.h5"
+                }
+            },
+            "attach_to": 1
+         }
+    ],
+    "losses": [
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 0
+        },
+        {
+            "definition": "categorical_crossentropy",
+            "coeff": 1.0,
+            "attach_to": 1
+        }
+    ],
+    "metrics": [
+        {"definition": "categorical_accuracy", "attach_to": 0},
+        {"definition": "categorical_accuracy", "attach_to": 1}
+    ],
+    "optimizer": {
+        "definition": "MomentumOptimizer",
+        "params": {
+            "learning_rate": "step_scheduler",
+            "momentum": 0.4,
+            "use_nesterov": true
+        }
+    }
+}
