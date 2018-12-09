@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import cv2
+import os
+import h5py
 
 
 class toy:
@@ -41,6 +43,84 @@ class toy:
                 images[i, ...] = cv2.resize(self.x[i], (size, size))
             self.x = images
 
+        if normalization:
+            self.x = self.x / 127.5 - 1.
+
+        self._indices = np.arange(self.x.shape[0])
+        if shuffle:
+            np.random.shuffle(self._indices)
+        self.batch_size = batch_size
+        self._k = 0
+        self.shuffle = shuffle
+
+        self._augmentation = augmentation
+        if augmentation:
+            generator = ImageDataGenerator(rotation_range=10,
+                                           zoom_range=0.1,
+                                           horizontal_flip=True,
+                                           vertical_flip=False)
+            self.feeder = generator.flow(
+                    self.x, self.y,
+                    batch_size=self.batch_size, shuffle=shuffle)
+
+        self._name = dataset
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if not self._augmentation:
+            if self._k + self.batch_size > self.n:
+                if self.shuffle:
+                    np.random.shuffle(self._indices)
+                self._k = 0
+            x_slice = self.x[self._indices[self._k:self._k+self.batch_size]]
+            y_slice = self.y[self._indices[self._k:self._k+self.batch_size]]
+            self._k += self.batch_size
+        else:
+            x_slice, y_slice = next(self.feeder)
+        return x_slice, y_slice
+
+    def __str__(self):
+        return self._name
+
+    def __repr__(self):
+        return self._name
+
+
+class xy_hdf5:
+    """A feeder that reads an HDF5 dataset and applies augmentation if needed
+    """
+    def __init__(self,
+                 batch_size,
+                 phase,
+                 dataset='unknown',
+                 h5file=None,
+                 mode='rgb',
+                 normalization=False,
+                 augmentation=False,
+                 size=None,
+                 shuffle=False):
+
+        h5file = os.path.expanduser(h5file)
+        dataset = h5py.File(h5file, 'r')
+        self.x, self.y = dataset['X'].value, dataset['Y'].value
+        dataset.close()
+
+        if mode == 'gray' and self.x.shape[-1] == 3:
+            self.x = np.mean(self.x, axis=-1, keepdims=True)
+        if mode == 'rgb' and self.x.shape[-1] == 1:
+            self.x = np.concatenate([self.x] * 3, axis=-1)
+
+        self.n = self.x.shape[0]
+        if size is not None:
+            images = np.zeros(shape=(self.n, size, size, self.x.shape[-1]))
+            for i in range(self.n):
+                images[i, ...] = cv2.resize(self.x[i], (size, size))
+            self.x = images
+
+        self.x = self.x.astype(np.float32)
+        self.y = self.y.astype(np.float32)
         if normalization:
             self.x = self.x / 127.5 - 1.
 
