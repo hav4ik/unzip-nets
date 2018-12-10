@@ -46,7 +46,8 @@ def run_app(app_name,
                           tasks,
                           optimizer_defs,
                           out_dir,
-                          args.epochs)
+                          args.epochs,
+                          args.steps_per_epoch)
 
     elif app_name == 'ipaths':
         integral_stats(sess,

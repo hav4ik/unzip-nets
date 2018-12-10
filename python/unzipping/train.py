@@ -8,7 +8,7 @@ from tqdm import tqdm
 from utils import graph_utils
 
 
-def _concatenate_feeders(feeders, step_per_epoch=None):
+def _concatenate_feeders(feeders, steps_per_epoch=None):
     """Make a index array to make a data feeder stream
     """
     if steps_per_epoch is None:
@@ -85,7 +85,7 @@ def train_alternating(sess,
                       tasks,
                       optimizer_defs,
                       out_dir,
-                      n_epochs
+                      n_epochs,
                       steps_per_epoch):
     """Trains a Multi-Tasking network with separated optimizer for each branch.
     """
