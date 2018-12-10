@@ -67,6 +67,7 @@ if __name__ == '__main__':
 
     train_args = parser.add_argument_group('train')
     train_args.add_argument('-n', '--epochs', type=int, default=10)
+    train_args.add_argument('-k', '--steps_per_epoch', type=int)
 
     gradstat_args = parser.add_argument_group('grad stat')
     gradstat_args.add_argument('-v', '--var_name', type=str)

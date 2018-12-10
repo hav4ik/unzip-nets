@@ -8,10 +8,14 @@ from tqdm import tqdm
 from utils import graph_utils
 
 
-def _concatenate_feeders(feeders):
+def _concatenate_feeders(feeders, step_per_epoch=None):
     """Make a index array to make a data feeder stream
     """
-    n_samples = np.array([f.n // f.batch_size for f in feeders])
+    if steps_per_epoch is None:
+        n_samples = np.array([f.n // f.batch_size for f in feeders])
+    else:
+        n_samples = np.array([steps_per_epoch for f in feeders])
+
     feeder_idx = np.zeros(shape=(sum(n_samples)), dtype=np.uint32)
     accumulated = 0
     for i in range(len(n_samples)):
@@ -81,10 +85,12 @@ def train_alternating(sess,
                       tasks,
                       optimizer_defs,
                       out_dir,
-                      n_epochs):
+                      n_epochs
+                      steps_per_epoch):
     """Trains a Multi-Tasking network with separated optimizer for each branch.
     """
-    train_feeder_idx, train_samples = _concatenate_feeders(tasks.train_feeders)
+    train_feeder_idx, train_samples = \
+            _concatenate_feeders(tasks.train_feeders, steps_per_epoch)
     val_feeder_idx, val_samples = _concatenate_feeders(tasks.val_feeders)
 
     tensorboard_dir, checkpoints_dir = _prepare_dirs(exp_name, out_dir)
