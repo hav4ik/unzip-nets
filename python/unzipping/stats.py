@@ -31,7 +31,8 @@ def integral_stats(sess,
                    model,
                    layer_name,
                    tasks,
-                   out_dir):
+                   out_dir,
+                   steps_per_epoch):
 
     initial_point_path = '/tmp/initial_point'
     model.saver.save(sess, initial_point_path, write_meta_graph=False)
@@ -68,7 +69,11 @@ def integral_stats(sess,
             targets.append(optimizer.apply_gradients(grads_and_vars))
     graph_utils.initialize_uninitialized_variables(sess)
 
-    n_samples = np.array([f.n // f.batch_size for f in tasks.train_feeders])
+    if steps_per_epoch is None:
+        n_samples = np.array([f.n // f.batch_size for f in tasks.train_feeders])
+    else:
+        n_samples = np.array([steps_per_epoch for f in tasks.train_feeders])
+
     initial_vals = sess.run(vars_to_monitor)
     after_vals = [None] * tasks.n
     for task_id in range(tasks.n):
@@ -84,12 +89,15 @@ def integral_stats(sess,
             sess.run(ops_to_run, feed_dict=feed_dict)
         after_vals[task_id] = sess.run(vars_to_monitor)
 
+    print('\nDistances from initial state:')
     for task_id in range(tasks.n):
         print('||{} - init|| = '.format(tasks.names[task_id]), end=' ')
         for k in range(len(initial_vals)):
             after_vals[task_id][k] -= initial_vals[k]
         print([np.linalg.norm(after_vals[task_id][k])
                for k in range(len(initial_vals))])
+
+    print('\nDistances between tasks:')
     for i in range(tasks.n):
         for j in range(i + 1, tasks.n):
             print('||{} - {}|| ='.format(
@@ -97,11 +105,11 @@ def integral_stats(sess,
             print([np.linalg.norm(after_vals[j][k] - after_vals[i][k])
                    for k in range(len(initial_vals))])
 
+    print('\nAngles between tasks:')
     for i in range(tasks.n):
         for j in range(i + 1, tasks.n):
             print('cos({}, {}) ='.format(
                 tasks.names[i], tasks.names[j]), end=' ')
-
             print([np.divide((after_vals[j][k] * after_vals[i][k]).sum(),
                    (lg.norm(after_vals[j][k]) * lg.norm(after_vals[i][k])))
                    for k in range(len(initial_vals))])

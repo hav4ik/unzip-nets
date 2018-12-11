@@ -54,7 +54,8 @@ def run_app(app_name,
                        model,
                        args.var_name,
                        tasks,
-                       out_dir)
+                       out_dir,
+                       args.steps_per_epoch)
 
 
 if __name__ == '__main__':
@@ -65,10 +66,10 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=32)
     parser.add_argument('-o', '--out_dir', type=str, default='out/')
     parser.add_argument('-w', '--weights', type=str)
+    parser.add_argument('-k', '--steps_per_epoch', type=int)
 
     train_args = parser.add_argument_group('train')
     train_args.add_argument('-n', '--epochs', type=int, default=10)
-    train_args.add_argument('-k', '--steps_per_epoch', type=int)
 
     gradstat_args = parser.add_argument_group('grad stat')
     gradstat_args.add_argument('-v', '--var_name', type=str)
