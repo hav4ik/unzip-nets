@@ -32,7 +32,22 @@ def integral_stats(sess,
                    layer_name,
                    tasks,
                    out_dir,
-                   steps_per_epoch):
+                   steps_per_epoch=None):
+    """
+    Given a multi-task network `model` and the bottleneck layer `layer_name`,
+    calculates the path length of single tasks after an epoch of independent
+    training, the distance between tasks after an epoch of training, and the
+    angle between paths of individual tasks after an epoch.
+
+    Args:
+      sess:             TensorFlow session
+      model:            a `graph_utils.ModelMeta` class instance
+      layer_name:       the bottleneck layer to monitor
+      tasks:            a `config_parser.Tasks` class instance
+      out_dir:          Deprecated parameter
+      steps_per_epoch:  Number of steps per one epoch. If None, dataset size
+                        will be used.
+    """
 
     initial_point_path = '/tmp/initial_point'
     model.saver.save(sess, initial_point_path, write_meta_graph=False)
