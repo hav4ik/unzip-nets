@@ -13,6 +13,8 @@ The following papers are awesome and can inspire and shed new lights to new appr
    [OpenReview](https://openreview.net/forum?id=B1e9W3AqFX) \| [PDF link](https://openreview.net/pdf?id=B1e9W3AqFX)
 *  GradNorm: Gradient Normalization for Adaptive Loss Balancing in Deep Multitask Networks *(ICML'18)*  
    [arxiv:1711.02257](https://arxiv.org/abs/1711.02257) \| [PDF link](https://arxiv.org/pdf/1711.02257.pdf)
+*  Multi-Task Learning as Multi-Objective Optimization \| *(NeurIPS'18)*  
+   [PDF link](https://papers.nips.cc/paper/7334-multi-task-learning-as-multi-objective-optimization.pdf) \| [arxiv:1810.04650](https://arxiv.org/abs/1810.04650)
 
 
 ### Representation Transfer:
