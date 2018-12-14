@@ -49,6 +49,13 @@ class ModelMeta:
     Holds the model's metadata necessary for performing unzipping movements.
     Nothing fancy, just a thin layer between our messy code with TF to keep
     things more or less organized.
+
+    Attributes:
+      var_list:     List of variables of the model (weights, BN stats, etc.)
+      inputs:       List of input placeholders
+      outputs:      List of output tensors
+      update_ops:   Lits of update ops (e.g. BN stats to be updated each run)
+      regularizer:  A regularizer term to be added to the loss function
     """
     def __init__(self,
                  sess,
@@ -56,15 +63,16 @@ class ModelMeta:
                  model_def=None,
                  definition=None,
                  weights=None,
+                 scope='model',
                  params={}):
 
         if definition is not None:
-            with tf.variable_scope('model'):
+            with tf.variable_scope(scope):
                 inputs, model_outputs, update_ops, regularizer = \
                         load_model_by_constructor(definition, weights, params)
 
             self.var_list = tf.get_collection(
-                    tf.GraphKeys.GLOBAL_VARIABLES, scope='model')
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope=scope)
 
             with tf.variable_scope('var_managers/', reuse=tf.AUTO_REUSE):
                 model_saver = tf.train.Saver(self.var_list, max_to_keep=None)
@@ -89,7 +97,7 @@ class ModelMeta:
             model_saver = tf.train.import_meta_graph(model_def)
 
             self.var_list = tf.get_collection(
-                    tf.GraphKeys.GLOBAL_VARIABLES, scope='model')
+                    tf.GraphKeys.GLOBAL_VARIABLES, scope=scope)
 
             if weights is not None:
                 weights_path = os.path.expanduser(weights)
@@ -114,6 +122,7 @@ class ModelMeta:
         self.update_ops = update_ops
         self.regularizer = regularizer
         self.saver = model_saver
+        self.scope = 'model'
 
 
 class LossMeta:

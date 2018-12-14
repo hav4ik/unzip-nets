@@ -1,6 +1,7 @@
 import uuid
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
+import numpy as np
 from tensorflow.core.framework import variable_pb2
 from tensorflow.keras import backend as K
 
@@ -241,7 +242,9 @@ def unzip(sess,
           session_prep=None,
           saver=None,
           saver_scope='save'):
-    """Performs unzipping on netwokr's graph while preserving the weights
+    """
+    Performs unzipping on netwokr's graph while preserving the weights.
+    Requires closing the current session (sorry, no way around in TensorFlow).
 
     Args:
       sess:             current session; this is going to be closed and f*cked.
@@ -284,3 +287,47 @@ def unzip(sess,
                              session_prep=session_prep,
                              saver=post_surgery_saver)
     return sess, full_saver
+
+
+def topological_sort(layer_names):
+    """
+    Given `n` names, returns a boolean matrix $L \in {0, 1}^{n \times n}$,
+    where `L[i, j] == true` iff layer i is lower than layer j (i flows to j).
+
+    Args:
+      layer_names:  List of `str` names of the layers in default graph.
+
+    Returns:
+      order_matrix: A boolean matrix L as described above.
+    """
+    n = len(layer_names)
+    layer_ops = [op for op in tf.get_default_graph().as_graph_def().node
+                 if op.name in layer_names]
+    order_matrix = np.zeros((n, n), dtype=bool)
+    for i in range(n):
+        forward_ops = ge.get_forward_walk_ops(layer_ops[i], inclusive=False)
+        for j in range(n):
+            if layer_ops[j] in forward_ops:
+                order_matrix[i, j] = True
+    return order_matrix
+
+
+class Flower:
+    """
+    Hides the mechanics of unzipping (stripping) networks. Holds the structure
+    of branching scheme for each layer.
+    """
+
+    def __init__(self, model_meta, branching_points):
+        """Args:
+          model_meta:        A `graph_utils.ModelMeta` instance
+          branching_points:  List of branching point names (layer prefixes)
+        """
+        self.branching_points = branching_points.copy()
+        self.model_meta = model_meta
+
+        order_matrix = topological_sort(branching_points)
+        indices = [(branching_points[i], i)
+                   for i in range(len(branching_points))]
+        order = lambda a, b: order_matrix[indices[a], indices[b]]
+        self.branching_points.sort(key=order)
