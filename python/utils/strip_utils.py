@@ -318,16 +318,86 @@ class Flower:
     of branching scheme for each layer.
     """
 
+    class Petal:
+        """A structure that holds branching points or output nodes.
+
+        Attributes:
+          layer_name:    name of the network layer that the Petal is holding
+          output_names:  names of output tensors that the Petal has path to
+          is_output:     `True` if the op it holds is an output tensor
+          children:      a list of `Petal` instances
+          parent:        `Petal` instance that contain this instance as a child
+        """
+        def __init__(self, layer_name, children=None, parent=None):
+            if not isinstance(layer_name, str):
+                raise ValueError('layer_name should be str.')
+            self.layer_name = layer_name
+            self.children = set()
+            self.parent = None
+            self.is_output = True
+
+            if children is not None:
+                self.add_children(children)
+            if parent is not None:
+                self.set_parent(parent)
+
+        def add_children(self, children):
+            if children is None:
+                return
+
+            def add_child(child):
+                if not isinstance(child, Flower.Petal):
+                    raise ValueError('You can only add instances of Petal '
+                                     'to the list of children.')
+                self.children.add(child)
+                child.parent = self
+                self.is_output = False
+
+            if isinstance(children, list):
+                for child in children:
+                    add_child(child)
+            else:
+                add_child(children)
+
+        def set_parent(self, parent):
+            if not isinstance(parent, Flower.Petal):
+                raise ValueError('parent should be an instance of Petal.')
+            self.parent = parent
+            if self not in parent.children:
+                parent.add_children(self)
+
+        def detach(self):
+            self.parent.children.remove(self)
+            for c in self.children:
+                c.parent = None
+            return self.parent, self.children
+
     def __init__(self, model_meta, branching_points):
         """Args:
           model_meta:        A `graph_utils.ModelMeta` instance
           branching_points:  List of branching point names (layer prefixes)
         """
-        self.branching_points = branching_points.copy()
         self.model_meta = model_meta
+        for o in self.model_meta.outputs:
+            if o.name in branching_points:
+                raise ValueError('branching_points should not contain output '
+                                 'tensors (%s).' % (o.name))
 
+        self.branching_points = branching_points.copy()
         order_matrix = topological_sort(branching_points)
         indices = [(branching_points[i], i)
                    for i in range(len(branching_points))]
-        order = lambda a, b: order_matrix[indices[a], indices[b]]
-        self.branching_points.sort(key=order)
+        self.branching_points.sort(
+                key=lambda a, b: order_matrix[indices[a], indices[b]])
+
+        branch_petals = []
+        for bp_name in self.branching_points:
+            branch_petals.append(Flower.Petal(bp_name))
+        for i in range(len(branch_petals) - 1):
+            branch_petals[i].add_children(branch_petals[i + 1])
+        output_petals = []
+        for o in self.model_meta.outputs:
+            output_petals.append(Flower.Petal(o.name))
+        branch_petals[-1].add_children(output_petals)
+        self.branch_petals = branch_petals
+        self.pivot = self.branch_petals[-1]
