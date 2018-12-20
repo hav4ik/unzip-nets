@@ -15,6 +15,10 @@ The following papers are awesome and can inspire and shed new lights to new appr
    [arxiv:1711.02257](https://arxiv.org/abs/1711.02257) \| [PDF link](https://arxiv.org/pdf/1711.02257.pdf)
 *  Multi-Task Learning as Multi-Objective Optimization \| *(NeurIPS'18)*  
    [PDF link](https://papers.nips.cc/paper/7334-multi-task-learning-as-multi-objective-optimization.pdf) \| [arxiv:1810.04650](https://arxiv.org/abs/1810.04650)
+*  Beyond Shared Hierarchies: Deep MultiTask Learning through Soft Layer Ordering *(ICLR'19)*  
+   [OpenReview](https://openreview.net/forum?id=BkXmYfbAZ&noteId=BkXmYfbAZ) \| [PDF link](https://openreview.net/pdf?id=BkXmYfbAZ)
+*  Meta-Learning Multi-Task Communication *(Awaiting review on ICLR'19)*  
+   [OpenReview](https://openreview.net/forum?id=B1e9W3AqFX) \| [PDF link](https://openreview.net/pdf?id=B1e9W3AqFX)
 
 
 ### Representation Transfer:
@@ -31,3 +35,5 @@ The following papers are awesome and can inspire and shed new lights to new appr
    [arxiv:1711.05908](https://arxiv.org/abs/1711.05908) \| [PDF link](https://arxiv.org/pdf/1711.05908.pdf)
 *  How important is a Neuron? *(NIPS'18)*  
    [Review](https://towardsdatascience.com/nips2018-google-paper-summary-how-important-is-a-neuron-3de4b085eb03) \| [arxiv:1805.12233](https://arxiv.org/abs/1805.12233) \| [PDF link](https://arxiv.org/pdf/1805.12233.pdf)
+*  Rethinking value of Network Pruning *(Possibly best paper on ICLR'19)*  
+   [Review](https://openreview.net/forum?id=rJlnB3C5Ym) \| [PDF link](https://openreview.net/pdf?id=rJlnB3C5Ym)
