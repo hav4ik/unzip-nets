@@ -122,7 +122,7 @@ class ModelMeta:
         self.update_ops = update_ops
         self.regularizer = regularizer
         self.saver = model_saver
-        self.scope = 'model'
+        self.scope = scope
 
 
 class LossMeta:
