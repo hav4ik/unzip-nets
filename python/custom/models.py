@@ -89,24 +89,24 @@ def alexnet(outputs):
 
 
 def resnet_20(outputs):
-    def residual_block(x, o_filters, increase=False):
+    def residual_block(x, o_filters, block_count, increase=False):
         stride = (1, 1) if not increase else (2, 2)
-
-        o1 = layers.Activation('relu')(layers.BatchNormalization()(x))
-        conv_1 = layers.Conv2D(
-            o_filters, kernel_size=(3, 3), strides=stride, padding='same',
-            kernel_initializer="he_normal")(o1)
-        o2 = layers.Activation('relu')(layers.BatchNormalization()(conv_1))
-        conv_2 = layers.Conv2D(
-            o_filters, kernel_size=(3, 3), strides=(1, 1), padding='same',
-            kernel_initializer="he_normal")(o2)
-        if increase:
-            projection = layers.Conv2D(
-                o_filters, kernel_size=(1, 1), strides=(2, 2), padding='same',
+        with tf.variable_scope('block_{}'.format(block_count)):
+            o1 = layers.Activation('relu')(layers.BatchNormalization()(x))
+            conv_1 = layers.Conv2D(
+                o_filters, kernel_size=(3, 3), strides=stride, padding='same',
                 kernel_initializer="he_normal")(o1)
-            block = layers.add([conv_2, projection])
-        else:
-            block = layers.add([conv_2, x])
+            o2 = layers.Activation('relu')(layers.BatchNormalization()(conv_1))
+            conv_2 = layers.Conv2D(
+                o_filters, kernel_size=(3, 3), strides=(1, 1), padding='same',
+                kernel_initializer="he_normal")(o2)
+            if increase:
+                projection = layers.Conv2D(
+                    o_filters, kernel_size=(1, 1), strides=(2, 2), padding='same',
+                    kernel_initializer="he_normal")(o1)
+                block = layers.add([conv_2, projection])
+            else:
+                block = layers.add([conv_2, x])
         return block
 
     img_input = layers.Input(shape=(32, 32, 3))
@@ -115,26 +115,31 @@ def resnet_20(outputs):
         filters=16, kernel_size=(3, 3), strides=(1, 1), padding='same',
         kernel_initializer="he_normal")(img_input)
 
+    block_count = 1
     for _ in range(stack_n):
-        x = residual_block(x, 16, False)
+        block_count += 1
+        x = residual_block(x, 16, block_count, False)
 
-    x = residual_block(x, 32, True)
+    block_count += 1
+    x = residual_block(x, 32, block_count, True)
     for _ in range(1, stack_n):
-        x = residual_block(x, 32, False)
+        block_count += 1
+        x = residual_block(x, 32, block_count, False)
 
-    x = residual_block(x, 64, True)
+    block_count += 1
+    x = residual_block(x, 64, block_count, True)
     for _ in range(1, stack_n):
-        x = residual_block(x, 64, False)
-
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('relu')(x)
-    x = layers.GlobalAveragePooling2D()(x)
+        block_count += 1
+        x = residual_block(x, 64, block_count, False)
 
     ys = []
     for output in outputs:
+        y = layers.BatchNormalization()(x)
+        y = layers.Activation('relu')(y)
+        y = layers.GlobalAveragePooling2D()(y)
         ys.append(layers.Dense(
             output['num'], activation='softmax',
-            kernel_initializer='he_normal')(x))
+            kernel_initializer='he_normal')(y))
     model = tf.keras.models.Model(inputs=[img_input], outputs=ys)
 
     return (model.inputs, model.outputs,
